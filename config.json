@@ -1,0 +1,55 @@
+{
+    "speech_cache_dir": "cache",
+    "transcribe_temp_dir": "cache",
+    "output_dir": "output",
+    "speech_language": "en-US",
+    "speech_gender": "Female",
+    "speech_voice": "en-US-CoraNeural",
+    "input_sample_rate": 8000,
+    "output_sample_rate": 16000,
+    "max_recording_time": 10,
+    "image_base_prompt": "A detailed oil painting of ",
+    "verse_system_prompt": "You are a poet who writes short light-hearted poems about various topics.",
+    "verse_base_prompt": "Write one verse about ",
+    "img_width": 1024,
+    "img_height": 1024,
+    "display_width": 1920,
+    "display_height": 1080,
+    "horiz_margin": 28,
+    "vert_margin": 28,
+    "verse_font": "arial",
+    "verse_font_size": 72,
+    "verse_line_spacing": 10,
+    "welcome_words": [
+        "Hello!",
+        "Hi!",
+        "Welcome!",
+        "Hi there!",
+        "Hello there!",
+        "Greetings!"
+    ],
+    "welcome_lines": [
+        "What would you like me to create for you?",
+        "What creation do you have in mind?",
+        "What subject would you like me to create?",
+        "What would you like me to paint for you?"
+    ],
+    "working_lines": [
+        "Okay, I'm working on it now!",
+        "Okay, I'm creating that for you now!",
+        "Okay, I'm painting that for you now!",
+        "Okay, I'm making that for you now!"
+    ],
+    "finished_lines": [
+        "Here it is. I hope you like it!",
+        "Here you go. I hope you like it!",
+        "Here's what I've created for you!",
+        "Here's what I made for you!"
+    ],
+    "failed_lines": [
+        "I'm sorry, I couldn't create that for you.",
+        "I'm sorry, I couldn't paint that for you.",
+        "I'm sorry, I couldn't make that for you.",
+        "I'm sorry, I can't create that for you."
+    ]
+}

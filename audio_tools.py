@@ -28,16 +28,15 @@ from typing import Tuple
 
 
 class AudioPlayer:
-    '''
+    """
     Audio player class for playing audio streams.
-    
+
     TODO: Add support for dynamically changing audio format, channels, and rate
-    '''
+    """
+
     def __init__(
-        self,
-        audio_format=pyaudio.paInt16,
-        channels=2,
-        rate=44000) -> None:
+        self, audio_format=pyaudio.paInt16, channels: int = 2, rate: int = 44000
+    ) -> None:
         self._pyaudio = pyaudio.PyAudio()
 
         self.audio_format = audio_format
@@ -48,11 +47,12 @@ class AudioPlayer:
             format=self.audio_format,
             channels=self.channels,
             rate=self.rate,
-            output=True)
+            output=True,
+        )
 
     def play(self, audio_stream: bytes) -> None:
         self._stream.write(audio_stream)
-          
+
     def terminate(self) -> None:
         self._stream.stop_stream()
         self._stream.close()
@@ -60,14 +60,11 @@ class AudioPlayer:
 
 
 class AudioRecorder:
-    '''
+    """
     Audio recorder class for recording audio streams.
-    '''
-    def __init__(
-        self,
-        audio_format=pyaudio.paInt16,
-        channels=2,
-        rate=44000) -> None:
+    """
+
+    def __init__(self, audio_format=pyaudio.paInt16, channels=2, rate=44000) -> None:
         self._pyaudio = pyaudio.PyAudio()
 
         self.audio_format = audio_format
@@ -75,13 +72,14 @@ class AudioRecorder:
         self.rate = rate
 
     def record(
-            self,
-            max_duration: int,
-            chunk_size: int = 1024,
-            silence_threshold: int = 2000,
-            min_frames: int = 18,
-            max_silent_frames: int = 10) -> Tuple[bytes, bool]:
-        '''
+        self,
+        max_duration: int,
+        chunk_size: int = 1024,
+        silence_threshold: int = 2000,
+        min_frames: int = 18,
+        max_silent_frames: int = 10,
+    ) -> Tuple[bytes, bool]:
+        """
         Record audio for up to max_duration seconds.
 
         Parameters:
@@ -90,22 +88,18 @@ class AudioRecorder:
             silence_threshold (int): Threshold for detecting silence
             min_frames (int): Minimum number of non-silent frames required for valid audio
             max_silent_frames (int): Number of silent frames to wait before ending recording
-        
+
         Returns:
             bytes: Audio stream
             bool: True if valid audio was recorded, False otherwise
-            
-        TODO: Remove magic numbers
 
         TODO: Improve silence detection
 
         TODO: Trim pre-audio silence
-        '''
+        """
         stream = self._pyaudio.open(
-            format=self.audio_format,
-            channels=self.channels,
-            rate=self.rate,
-            input=True)
+            format=self.audio_format, channels=self.channels, rate=self.rate, input=True
+        )
 
         frames = []
         num_frames = 0
@@ -114,11 +108,11 @@ class AudioRecorder:
         was_silent = True
 
         max_frames = int(max_duration * self.rate / chunk_size)
-        
+
         while (num_frames < max_frames) and not silence_detected:
             num_frames += 1
             data = stream.read(chunk_size)
-            data_array = array.array('h', data)
+            data_array = array.array("h", data)
 
             max_value = max(data_array)
 
@@ -143,7 +137,7 @@ class AudioRecorder:
         stream.stop_stream()
         stream.close()
 
-        return (b''.join(frames[:-max_silent_frames]), valid_audio)
+        return (b"".join(frames[:-max_silent_frames]), valid_audio)
 
     def terminate(self) -> None:
         self._pyaudio.terminate()

@@ -27,22 +27,27 @@ import xml.etree.ElementTree as ET
 
 
 class AzureSpeech:
-    def __init__(self,
-            subscription_key: str,
-            region: str,       
-            language: str,
-            gender: str,
-            voice: str,
-            output_format: str='riff-16khz-16bit-mono-pcm',
-            user_agent: str='DMW Azure Speech Tools 1.0') -> None:
-        
+    def __init__(
+        self,
+        subscription_key: str,
+        region: str,
+        language: str,
+        gender: str,
+        voice: str,
+        output_format: str = "riff-16khz-16bit-mono-pcm",
+        user_agent: str = "DMW Azure Speech Tools 1.0",
+    ) -> None:
         self._subscription_key: str = subscription_key
         self._region: str = region
 
-        self._fetch_token_url: str = f'https://{self._region}.api.cognitive.microsoft.com/sts/v1.0/issueToken'
-        self._tts_url: str = f'https://{self._region}.tts.speech.microsoft.com/cognitiveservices/v1'
+        self._fetch_token_url: str = (
+            f"https://{self._region}.api.cognitive.microsoft.com/sts/v1.0/issueToken"
+        )
+        self._tts_url: str = (
+            f"https://{self._region}.tts.speech.microsoft.com/cognitiveservices/v1"
+        )
 
-        self._access_token: str = ''
+        self._access_token: str = ""
         self._token_exp_time: float = time.monotonic()
 
         self.output_format: str = output_format
@@ -58,17 +63,17 @@ class AzureSpeech:
 
     def _refresh_token(self) -> None:
         if time.monotonic() >= self._token_exp_time:
-            headers = {
-                'Ocp-Apim-Subscription-Key': self._subscription_key
-            }
+            headers = {"Ocp-Apim-Subscription-Key": self._subscription_key}
 
             response = requests.post(self._fetch_token_url, headers=headers)
-            
+
             self._access_token = str(response.text)
-            self._token_exp_time = time.monotonic() + (8*60) # Hard coded 8-minute expiration
+            self._token_exp_time = time.monotonic() + (
+                8 * 60
+            )  # Hard coded 8-minute expiration
 
     def text_to_speech(self, text: str) -> bytes:
-        '''
+        """
         Converts text to speech using Azure Cognitive Services
 
         Parameters:
@@ -76,58 +81,50 @@ class AzureSpeech:
 
         Returns:
             bytes: Speech data in selected format
-        '''
+        """
         self._refresh_token()
 
         headers = {
-            'Authorization': 'Bearer ' + self._access_token,
-            'Content-Type': 'application/ssml+xml',
-            'X-Microsoft-OutputFormat': self.output_format,
-            'User-Agent': self.user_agent
+            "Authorization": "Bearer " + self._access_token,
+            "Content-Type": "application/ssml+xml",
+            "X-Microsoft-OutputFormat": self.output_format,
+            "User-Agent": self.user_agent,
         }
 
         speak_attrib = {
-            'version': '1.0',
-            'xmlns': 'http://www.w3.org/2001/10/synthesis',
-            'xmlns:mstts': 'https://www.w3.org/2001/mstts',
-            'xml:lang': self.language
+            "version": "1.0",
+            "xmlns": "http://www.w3.org/2001/10/synthesis",
+            "xmlns:mstts": "https://www.w3.org/2001/mstts",
+            "xml:lang": self.language,
         }
 
-        ssml_root = ET.Element('speak', speak_attrib)
+        ssml_root = ET.Element("speak", speak_attrib)
 
         ssml_subelements = []
 
-        ssml_subelements.append({
-            'voice': {
-                'name': self.voice
-            }
-        })
+        ssml_subelements.append({"voice": {"name": self.voice}})
 
         express_as_attrib = {}
 
         if self.style:
-            express_as_attrib['style'] = self.style
+            express_as_attrib["style"] = self.style
 
         if self.role:
-            express_as_attrib['role'] = self.role
+            express_as_attrib["role"] = self.role
 
         if express_as_attrib:
-            ssml_subelements.append({
-                'mstts:express-as': express_as_attrib
-            })
+            ssml_subelements.append({"mstts:express-as": express_as_attrib})
 
         prosody_attrib = {}
 
         if self.pitch:
-            prosody_attrib['pitch'] = self.pitch
-        
+            prosody_attrib["pitch"] = self.pitch
+
         if self.rate:
-            prosody_attrib['rate'] = self.rate
+            prosody_attrib["rate"] = self.rate
 
         if prosody_attrib:
-            ssml_subelements.append({
-                'prosody': prosody_attrib
-            })
+            ssml_subelements.append({"prosody": prosody_attrib})
 
         ssml_parent = ssml_root
 
@@ -139,6 +136,8 @@ class AzureSpeech:
 
         request_content = ET.tostring(ssml_root)
 
-        response = requests.post(url=self._tts_url, headers=headers, data=request_content)
+        response = requests.post(
+            url=self._tts_url, headers=headers, data=request_content
+        )
 
         return response.content

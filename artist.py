@@ -218,18 +218,18 @@ def show_status_screen(
     surface.fill(pygame.Color("black"))
 
     font = pygame.font.SysFont("Arial", 200)
-    x_pos = surface.get_width() / 2 - font.size("A.R.T.I.S.T.")[0] / 2
+    x_pos = int(surface.get_width() / 2 - font.size("A.R.T.I.S.T.")[0] / 2)
     text_surface = font.render("A.R.T.I.S.T.", True, pygame.Color("white"))
     surface.blit(text_surface, (x_pos, vert_margin))
 
     font = pygame.font.SysFont("Arial", 60)
     tagline = "Audio-Responsive Transformative Imagination Synthesis Technology"
-    x_pos = surface.get_width() / 2 - font.size(tagline)[0] / 2
+    x_pos = int(surface.get_width() / 2 - font.size(tagline)[0] / 2)
     text_surface = font.render(tagline, True, pygame.Color("white"))
     surface.blit(text_surface, (x_pos, 250))
 
     font = pygame.font.SysFont("Arial", 100)
-    x_pos = surface.get_width() / 2 - font.size(text)[0] / 2
+    x_pos = int(surface.get_width() / 2 - font.size(text)[0] / 2)
     text_surface = font.render(text, True, pygame.Color("white"))
     surface.blit(text_surface, (x_pos, 500))
 
@@ -458,7 +458,7 @@ def main() -> None:
                         )
                         disp_surface.blit(
                             text_surface_obj, (verse_x,
-                                               (display_height / 2) + offset)
+                                               int((display_height / 2) + offset))
                         )
                         offset += int(total_height / len(verse_lines))
 

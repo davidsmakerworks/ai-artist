@@ -31,31 +31,39 @@ class AudioPlayer:
     """
     Audio player class for playing audio streams.
 
-    TODO: Add support for dynamically changing audio format, channels, and rate
+    TODO: Troubleshoot popping/clicking sounds when playing audio
     """
 
     def __init__(
-        self, audio_format=pyaudio.paInt16, channels: int = 2, rate: int = 44000
+        self, sample_width: int = 2, channels: int = 2, rate: int = 44000
     ) -> None:
         self._pyaudio = pyaudio.PyAudio()
 
-        self.audio_format = audio_format
+        self.sample_width = sample_width
         self.channels = channels
         self.rate = rate
 
-        self._stream = self._pyaudio.open(
-            format=self.audio_format,
+    @property
+    def sample_width(self) -> int:
+        return pyaudio.get_sample_size(self._audio_format)
+
+    @sample_width.setter
+    def sample_width(self, sample_width: int) -> None:
+        self._audio_format = pyaudio.get_format_from_width(sample_width)
+
+    def play(self, audio_stream: bytes) -> None:
+        stream = self._pyaudio.open(
+            format=self._audio_format,
             channels=self.channels,
             rate=self.rate,
             output=True,
         )
 
-    def play(self, audio_stream: bytes) -> None:
-        self._stream.write(audio_stream)
+        stream.write(audio_stream)
+        stream.stop_stream()
+        stream.close()
 
     def terminate(self) -> None:
-        self._stream.stop_stream()
-        self._stream.close()
         self._pyaudio.terminate()
 
 
@@ -64,12 +72,14 @@ class AudioRecorder:
     Audio recorder class for recording audio streams.
     """
 
-    def __init__(self, audio_format=pyaudio.paInt16, channels=2, rate=44000) -> None:
+    def __init__(self, sample_width: int = 2, channels: int = 2, rate: int = 44000) -> None:
         self._pyaudio = pyaudio.PyAudio()
 
-        self.audio_format = audio_format
+        self.sample_width = sample_width
         self.channels = channels
         self.rate = rate
+
+        self._audio_format = pyaudio.get_format_from_width(self.sample_width)
 
     def record(
         self,
@@ -97,8 +107,9 @@ class AudioRecorder:
 
         TODO: Trim pre-audio silence
         """
+
         stream = self._pyaudio.open(
-            format=self.audio_format, channels=self.channels, rate=self.rate, input=True
+            format=self._audio_format, channels=self.channels, rate=self.rate, input=True
         )
 
         frames = []

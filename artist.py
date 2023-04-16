@@ -43,7 +43,6 @@ import os
 import string
 import wave
 
-import pyaudio
 import pygame
 import openai
 
@@ -135,7 +134,8 @@ def speak_text(
     """
     text_details = speech_svc.language + speech_svc.gender + speech_svc.voice + text
 
-    text_details_hash = hashlib.sha256(text_details.encode("utf-8")).hexdigest()
+    text_details_hash = hashlib.sha256(
+        text_details.encode("utf-8")).hexdigest()
 
     filename = os.path.join(cache_dir, f"{text_details_hash}.wav")
 
@@ -144,18 +144,8 @@ def speak_text(
 
         with wave.open(filename, "wb") as f:
             f.setnchannels(player.channels)
-
-            if player.audio_format == pyaudio.paInt8:
-                f.setsampwidth(1)
-            elif player.audio_format == pyaudio.paInt16:
-                f.setsampwidth(2)
-            elif player.audio_format == pyaudio.paInt32:
-                f.setsampwidth(4)
-            else:
-                raise ValueError("Invalid audio format")
-
+            f.setsampwidth(player.sample_width)
             f.setframerate(player.rate)
-
             f.writeframes(audio_data)
 
     with wave.open(filename, "rb") as f:
@@ -211,7 +201,8 @@ def get_verse(system_prompt: str, base_prompt: str, user_prompt: str) -> str:
         {"role": "user", "content": base_prompt + " " + user_prompt},
     ]
 
-    response = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=messages)
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo", messages=messages)
 
     return response["choices"][0]["message"]["content"]
 
@@ -309,9 +300,11 @@ def main() -> None:
         voice=voice,
     )
 
-    audio_player = AudioPlayer(channels=1, rate=output_sample_rate)
+    audio_player = AudioPlayer(
+        sample_width=2, channels=1, rate=output_sample_rate)
 
-    audio_recorder = AudioRecorder(channels=1, rate=input_sample_rate)
+    audio_recorder = AudioRecorder(
+        sample_width=2, channels=1, rate=input_sample_rate)
 
     transcriber = Transcriber(
         temp_dir=transcribe_temp_dir,
@@ -322,7 +315,12 @@ def main() -> None:
 
     start_new = True
 
-    show_status_screen(disp_surface, "Ready")
+    show_status_screen(
+        surface=disp_surface,
+        text="Ready",
+        horiz_margin=horiz_margin,
+        vert_margin=vert_margin,
+    )
 
     while True:
         while True:
@@ -403,7 +401,8 @@ def main() -> None:
                         prompt=img_prompt, size=img_size, response_format="b64_json"
                     )
 
-                    img_bytes = base64.b64decode(response["data"][0]["b64_json"])
+                    img_bytes = base64.b64decode(
+                        response["data"][0]["b64_json"])
 
                     verse = get_verse(
                         system_prompt=verse_system_prompt,
@@ -458,7 +457,8 @@ def main() -> None:
                             line, True, pygame.Color("white")
                         )
                         disp_surface.blit(
-                            text_surface_obj, (verse_x, (display_height / 2) + offset)
+                            text_surface_obj, (verse_x,
+                                               (display_height / 2) + offset)
                         )
                         offset += int(total_height / len(verse_lines))
 
@@ -474,12 +474,14 @@ def main() -> None:
                     with open(os.path.join(output_dir, name + ".png"), "wb") as f:
                         f.write(img_bytes)
 
-                    img = pygame.image.load(os.path.join(output_dir, name + ".png"))
+                    img = pygame.image.load(
+                        os.path.join(output_dir, name + ".png"))
                     disp_surface.blit(img, (img_x, vert_margin))
                     pygame.display.update()
 
                     pygame.image.save(
-                        disp_surface, os.path.join(output_dir, name + "-verse.png")
+                        disp_surface, os.path.join(
+                            output_dir, name + "-verse.png")
                     )
                 else:
                     show_status_screen(

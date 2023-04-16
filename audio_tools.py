@@ -79,7 +79,13 @@ class AudioRecorder:
         self.channels = channels
         self.rate = rate
 
-        self._audio_format = pyaudio.get_format_from_width(self.sample_width)
+    @property
+    def sample_width(self) -> int:
+        return pyaudio.get_sample_size(self._audio_format)
+
+    @sample_width.setter
+    def sample_width(self, sample_width: int) -> None:
+        self._audio_format = pyaudio.get_format_from_width(sample_width)
 
     def record(
         self,

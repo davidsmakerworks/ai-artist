@@ -439,7 +439,7 @@ def main() -> None:
 
                     total_height -= verse_line_spacing  # No spacing after last line
 
-                    offset = -int(total_height / (len(verse_lines) / 2))
+                    offset = -int(total_height / 2)
 
                     img_side = random.choice(["left", "right"])
 

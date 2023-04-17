@@ -213,6 +213,8 @@ def check_moderation(msg: str) -> bool:
     if flagged:
         logger.info(f"Message flagged by moderation: {msg}")
         logger.info(f'Moderation response: {response}')
+    else:
+        logger.info(f"Moderation check padssed")
 
     return not flagged
 
@@ -298,7 +300,7 @@ def main() -> None:
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
-    logger.info('Starting A.R.T.I.S.T.')
+    logger.info('*** Starting A.R.T.I.S.T. ***')
 
     cache_dir = config["speech_cache_dir"]
     transcribe_temp_dir = config["transcribe_temp_dir"]
@@ -381,6 +383,7 @@ def main() -> None:
             status = check_for_event()
 
             if status == "Quit":
+                logger.info("*** A.R.T.I.S.T. is shutting down. ***")
                 pygame.quit()
                 return
             elif status == "Next":
@@ -388,6 +391,7 @@ def main() -> None:
                 break
 
         if start_new:
+            logger.info('=== Starting new creation ===')
             show_status_screen(
                 surface=disp_surface,
                 text=" ",
@@ -483,7 +487,16 @@ def main() -> None:
                         verse_lines = [line.strip() for line in verse_lines]
                         logger.info(f"Verse: {'/'.join(verse_lines)}")
 
-                        longest_line = max(verse_lines, key=len)
+                        font_obj = pygame.font.SysFont(verse_font, verse_font_size)
+                        longest_size = 0
+                        
+                        # Need to check pizel size of each line to account for
+                        # proprtional fonts. Assumes that size scales linearly.
+                        for line in verse_lines:
+                            text_size = font_obj.size(line)
+                            if text_size[0] > longest_size:
+                                longest_size = text_size[0]
+                                longest_line = line
 
                         font_size = verse_font_size
                         will_fit = False

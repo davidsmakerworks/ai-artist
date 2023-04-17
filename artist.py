@@ -32,12 +32,15 @@ Uses Azure Speech API to convert text to speech.
 
 TODO: General cleanup and structural improvements
 
+TODO: Improve logging to eliminate global logger object
+
 TODO: Upload results to a site so users can download their creations
 """
 
 import base64
 import hashlib
 import json
+import logging
 import random
 import os
 import string
@@ -65,6 +68,7 @@ class Button(IntEnum):
     BTN_LS = 8
     BTN_RS = 9
 
+logger = logging.getLogger('ai-artist')
 
 class Transcriber:
     def __init__(
@@ -92,7 +96,12 @@ class Transcriber:
         writer.writeframes(audio_stream)
 
         with open(temp_file_name, "rb") as f:
-            response = openai.Audio.transcribe(model="whisper-1", file=f)
+            try:
+                response = openai.Audio.transcribe(model="whisper-1", file=f)
+            except Exception as e:
+                logger.error(f'Transcriber response: {response}')
+                logger.exception(e)
+                raise
 
         return response["text"]
 
@@ -132,14 +141,18 @@ def speak_text(
     Speak text using Azure Speech API.
     Cache audio files to avoid unnecessary API calls.
     """
+    logger.info(f"Speaking: {text}")
     text_details = speech_svc.language + speech_svc.gender + speech_svc.voice + text
 
     text_details_hash = hashlib.sha256(
         text_details.encode("utf-8")).hexdigest()
 
+    logger.debug(f"Text details: {text_details} - Hash: {text_details_hash}")
+
     filename = os.path.join(cache_dir, f"{text_details_hash}.wav")
 
     if not os.path.exists(filename):
+        logger.debug(f"Cache miss - generating audio file: {filename}")
         audio_data = speech_svc.text_to_speech(text)
 
         with wave.open(filename, "wb") as f:
@@ -149,6 +162,7 @@ def speak_text(
             f.writeframes(audio_data)
 
     with wave.open(filename, "rb") as f:
+        logger.debug(f"Playing audio file: {filename}")
         player.play(f.readframes(f.getnframes()))
 
 
@@ -187,9 +201,20 @@ def check_moderation(msg: str) -> bool:
 
     Returns True if message is safe, False if it is not.
     """
-    response = openai.Moderation.create(input=msg)
+    try:
+        response = openai.Moderation.create(input=msg)
+    except Exception as e:
+        logger.error(f'Moderation response: {response}')
+        logger.exception(e)
+        raise
 
-    return not response["results"][0]["flagged"]
+    flagged = response["results"][0]["flagged"]
+
+    if flagged:
+        logger.info(f"Message flagged by moderation: {msg}")
+        logger.info(f'Moderation response: {response}')
+
+    return not flagged
 
 
 def get_verse(system_prompt: str, base_prompt: str, user_prompt: str) -> str:
@@ -201,8 +226,13 @@ def get_verse(system_prompt: str, base_prompt: str, user_prompt: str) -> str:
         {"role": "user", "content": base_prompt + " " + user_prompt},
     ]
 
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo", messages=messages)
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo", messages=messages)
+    except Exception as e:
+        logger.error(f'Chat completion response: {response}')
+        logger.exception(e)
+        raise
 
     return response["choices"][0]["message"]["content"]
 
@@ -252,6 +282,24 @@ def main() -> None:
         print("Please create a config.json file.")
         return
 
+    logger.setLevel(logging.DEBUG)
+
+    file_handler = logging.FileHandler("artist.log")
+    file_handler.setLevel(logging.DEBUG)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)-8s - %(message)s")
+
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    logger.info('Starting A.R.T.I.S.T.')
+
     cache_dir = config["speech_cache_dir"]
     transcribe_temp_dir = config["transcribe_temp_dir"]
     output_dir = config["output_dir"]
@@ -288,10 +336,13 @@ def main() -> None:
 
     random.seed()
 
+    logger.debug("Initializing display...")
     disp_surface = init_display(width=display_width, height=display_height)
 
+    logger.debug("Initializing joystick...")
     init_joystick()
 
+    logger.debug("Initializing speech...")
     speech_svc = AzureSpeech(
         subscription_key=azure_speech_key,
         region=azure_speech_region,
@@ -300,12 +351,15 @@ def main() -> None:
         voice=voice,
     )
 
+    logger.debug("Initializing audio player...")
     audio_player = AudioPlayer(
         sample_width=2, channels=1, rate=output_sample_rate)
 
+    logger.debug("Initializing audio recorder...")
     audio_recorder = AudioRecorder(
         sample_width=2, channels=1, rate=input_sample_rate)
 
+    logger.debug("Initializing transcriber...")
     transcriber = Transcriber(
         temp_dir=transcribe_temp_dir,
         channels=1,
@@ -362,6 +416,8 @@ def main() -> None:
                 vert_margin=vert_margin,
             )
 
+            logger.debug("Recording...")
+
             start_new = False
 
         silent_loops = 0
@@ -387,7 +443,11 @@ def main() -> None:
 
                 msg = transcriber.transcribe(audio_stream=in_stream)
 
+                logger.info(f"Transcribed: {msg}")
+
                 name = get_random_string(12)
+
+                logger.info(f"Base name: {name}")
 
                 with open(os.path.join(output_dir, name + ".txt"), "w") as f:
                     f.write(msg)
@@ -395,94 +455,105 @@ def main() -> None:
                 img_prompt = image_base_prompt + msg
 
                 can_create = check_moderation(img_prompt)
+                creation_failed = False
 
                 if can_create:
-                    response = openai.Image.create(
-                        prompt=img_prompt, size=img_size, response_format="b64_json"
-                    )
+                    try:
+                        response = openai.Image.create(
+                            prompt=img_prompt, size=img_size, response_format="b64_json"
+                        )
+                    except Exception as e:
+                        logger.error(f"Image creation response: {response}")
+                        logger.exception(e)
+                        creation_failed = True
 
-                    img_bytes = base64.b64decode(
-                        response["data"][0]["b64_json"])
+                    if not creation_failed:
+                        img_bytes = base64.b64decode(
+                            response["data"][0]["b64_json"])
 
-                    verse = get_verse(
-                        system_prompt=verse_system_prompt,
-                        base_prompt=verse_base_prompt,
-                        user_prompt=msg,
-                    )
+                        logger.debug("Getting verse...")
+                        verse = get_verse(
+                            system_prompt=verse_system_prompt,
+                            base_prompt=verse_base_prompt,
+                            user_prompt=msg,
+                        )
 
-                    verse_lines = verse.split("\n")
+                        verse_lines = verse.split("\n")
 
-                    verse_lines = [line.strip() for line in verse_lines]
+                        verse_lines = [line.strip() for line in verse_lines]
+                        logger.info(f"Verse: {'/'.join(verse_lines)}")
 
-                    longest_line = max(verse_lines, key=len)
+                        longest_line = max(verse_lines, key=len)
 
-                    font_size = verse_font_size
-                    will_fit = False
+                        font_size = verse_font_size
+                        will_fit = False
 
-                    while not will_fit:
-                        font_obj = pygame.font.SysFont(verse_font, font_size)
+                        while not will_fit:
+                            font_obj = pygame.font.SysFont(verse_font, font_size)
 
-                        text_size = font_obj.size(longest_line)
+                            text_size = font_obj.size(longest_line)
 
-                        if text_size[0] < max_verse_width:
-                            will_fit = True
+                            if text_size[0] < max_verse_width:
+                                will_fit = True
+                            else:
+                                font_size -= 2
+
+                        total_height = 0
+
+                        for line in verse_lines:
+                            text_size = font_obj.size(line)
+
+                            total_height += text_size[1]
+                            total_height += verse_line_spacing
+
+                        total_height -= verse_line_spacing  # No spacing after last line
+
+                        offset = -int(total_height / 2)
+
+                        img_side = random.choice(["left", "right"])
+
+                        disp_surface.fill(pygame.Color("black"))
+
+                        if img_side == "left":
+                            img_x = horiz_margin
+                            verse_x = horiz_margin + img_width + horiz_margin
                         else:
-                            font_size -= 2
+                            img_x = display_width - horiz_margin - img_width
+                            verse_x = horiz_margin
 
-                    total_height = 0
+                        for line in verse_lines:
+                            text_surface_obj = font_obj.render(
+                                line, True, pygame.Color("white")
+                            )
+                            disp_surface.blit(
+                                text_surface_obj, (verse_x,
+                                                int((display_height / 2) + offset))
+                            )
+                            offset += int(total_height / len(verse_lines))
 
-                    for line in verse_lines:
-                        text_size = font_obj.size(line)
+                        finished_phrase = random.choice(config["finished_lines"])
 
-                        total_height += text_size[1]
-                        total_height += verse_line_spacing
-
-                    total_height -= verse_line_spacing  # No spacing after last line
-
-                    offset = -int(total_height / 2)
-
-                    img_side = random.choice(["left", "right"])
-
-                    disp_surface.fill(pygame.Color("black"))
-
-                    if img_side == "left":
-                        img_x = horiz_margin
-                        verse_x = horiz_margin + img_width + horiz_margin
-                    else:
-                        img_x = display_width - horiz_margin - img_width
-                        verse_x = horiz_margin
-
-                    for line in verse_lines:
-                        text_surface_obj = font_obj.render(
-                            line, True, pygame.Color("white")
+                        speak_text(
+                            text=finished_phrase,
+                            cache_dir=cache_dir,
+                            player=audio_player,
+                            speech_svc=speech_svc,
                         )
-                        disp_surface.blit(
-                            text_surface_obj, (verse_x,
-                                               int((display_height / 2) + offset))
+
+                        logger.debug("Saving image...")
+                        with open(os.path.join(output_dir, name + ".png"), "wb") as f:
+                            f.write(img_bytes)
+
+                        img = pygame.image.load(
+                            os.path.join(output_dir, name + ".png"))
+                        disp_surface.blit(img, (img_x, vert_margin))
+                        pygame.display.update()
+
+                        logger.debug("Saving screenshot...")
+                        pygame.image.save(
+                            disp_surface, os.path.join(
+                                output_dir, name + "-verse.png")
                         )
-                        offset += int(total_height / len(verse_lines))
-
-                    finished_phrase = random.choice(config["finished_lines"])
-
-                    speak_text(
-                        text=finished_phrase,
-                        cache_dir=cache_dir,
-                        player=audio_player,
-                        speech_svc=speech_svc,
-                    )
-
-                    with open(os.path.join(output_dir, name + ".png"), "wb") as f:
-                        f.write(img_bytes)
-
-                    img = pygame.image.load(
-                        os.path.join(output_dir, name + ".png"))
-                    disp_surface.blit(img, (img_x, vert_margin))
-                    pygame.display.update()
-
-                    pygame.image.save(
-                        disp_surface, os.path.join(
-                            output_dir, name + "-verse.png")
-                    )
                 else:
                     show_status_screen(
                         surface=disp_surface,
@@ -504,6 +575,7 @@ def main() -> None:
                 silent_loops += 1
 
         if silent_loops == 10:
+            logger.debug("Silence detected")
             show_status_screen(
                 surface=disp_surface,
                 text="Ready",

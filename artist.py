@@ -214,7 +214,7 @@ def check_moderation(msg: str) -> bool:
         logger.info(f"Message flagged by moderation: {msg}")
         logger.info(f'Moderation response: {response}')
     else:
-        logger.info(f"Moderation check padssed")
+        logger.info(f"Moderation check passed")
 
     return not flagged
 
@@ -460,6 +460,7 @@ def main() -> None:
 
                 can_create = check_moderation(img_prompt)
                 creation_failed = False
+                response = None # Clear out previous response
 
                 if can_create:
                     try:
@@ -566,6 +567,21 @@ def main() -> None:
                         pygame.image.save(
                             disp_surface, os.path.join(
                                 output_dir, name + "-verse.png")
+                        )
+                    else:
+                        show_status_screen(
+                            surface=disp_surface,
+                            text="Creation failed!",
+                            horiz_margin=horiz_margin,
+                            vert_margin=vert_margin,
+                        )
+                        failed_phrase = random.choice(config["failed_lines"])
+
+                        speak_text(
+                            text=failed_phrase,
+                            cache_dir=cache_dir,
+                            player=audio_player,
+                            speech_svc=speech_svc,
                         )
                 else:
                     show_status_screen(

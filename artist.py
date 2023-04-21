@@ -57,19 +57,6 @@ from pygame.locals import *
 from typing import Union
 
 
-class Button(IntEnum):
-    BTN_A = 0
-    BTN_B = 1
-    BTN_X = 2
-    BTN_Y = 3
-    BTN_LB = 4
-    BTN_RB = 5
-    BTN_BACK = 6
-    BTN_START = 7
-    BTN_LS = 8
-    BTN_RS = 9
-
-
 logger = logging.getLogger("ai-artist")
 
 
@@ -170,15 +157,23 @@ def init_display(width: int, height: int) -> pygame.Surface:
     return surface
 
 
-def init_joystick() -> None:
+def init_joystick() -> Union[pygame.joystick.JoystickType, None]:
     """
     Initialize joystick if one is connected.
+
+    Returns joystick object if one is connected, otherwise returns None.
+
+    The returned joystick object must remain in scope for button press events
+    to be detected.
     """
     pygame.joystick.init()
 
     if pygame.joystick.get_count() > 0:
         joystick = pygame.joystick.Joystick(0)
         joystick.init()
+        return joystick
+    else:
+        return None
 
 
 def speak_text(
@@ -212,7 +207,13 @@ def speak_text(
         player.play(f.readframes(f.getnframes()))
 
 
-def check_for_event() -> Union[str, None]:
+def check_for_event(
+    js: Union[pygame.joystick.JoystickType, None],
+    generate_button: int,
+    daydream_button: int,
+    shutdown_hold_button: int,
+    shutdown_press_button: int,
+) -> Union[str, None]:
     """
     Check for events and return a string representing the event if one is found.
     """
@@ -224,12 +225,13 @@ def check_for_event() -> Union[str, None]:
                 return "Next"
             if event.key == K_d:
                 return "Daydream"
-        elif event.type == pygame.JOYBUTTONDOWN:
-            if event.button == Button.BTN_BACK:
-                return "Quit"
-            if event.button == Button.BTN_A:
+        elif js and event.type == pygame.JOYBUTTONDOWN:
+            if event.button == shutdown_press_button:
+                if js.get_button(shutdown_hold_button):
+                    return "Quit"
+            if event.button == generate_button:
                 return "Next"
-            if event.button == Button.BTN_X:
+            if event.button == daydream_button:
                 return "Daydream"
 
     return None
@@ -304,7 +306,8 @@ def get_best_verse(
     for verse in enumerate(verses, start=1):
         critic_message += f"Poem {verse[0]}: {verse[1]}\n"
 
-    logger.info(f"Critic message: {critic_message}")
+    critic_log_message = critic_message.strip().replace("\n", "/")
+    logger.info(f"Critic message: {critic_log_message}")
 
     chosen_poem = None
 
@@ -418,12 +421,19 @@ def main() -> None:
     horiz_margin = config["horiz_margin"]
     vert_margin = config["vert_margin"]
 
+    generate_button = config["generate_button"]
+    daydream_button = config["daydream_button"]
+    shutdown_hold_button = config["shutdown_hold_button"]
+    shutdown_press_button = config["shutdown_press_button"]
+
     image_base_prompt = config["image_base_prompt"]
 
     num_verses = config["num_verses"]
 
     min_daydream_time = config["min_daydream_time"] * 60  # Convert to seconds
     max_daydream_time = config["max_daydream_time"] * 60  # Convert to seconds
+
+    max_consecutive_daydreams = config["max_consecutive_daydreams"]
 
     artist_system_prompt = config["artist_system_prompt"]
     artist_base_prompt = config["artist_base_prompt"]
@@ -443,7 +453,7 @@ def main() -> None:
     disp_surface = init_display(width=display_width, height=display_height)
 
     logger.debug("Initializing joystick...")
-    init_joystick()
+    js = init_joystick()
 
     logger.debug("Initializing speech...")
     speech_svc = AzureSpeech(
@@ -480,6 +490,8 @@ def main() -> None:
     start_new = True
     daydream = False
 
+    consecutive_daydreams = 0
+
     msg = ""
 
     show_status_screen(
@@ -495,7 +507,13 @@ def main() -> None:
 
     while True:
         while True:
-            status = check_for_event()
+            status = check_for_event(
+                js=js,
+                generate_button=generate_button,
+                daydream_button=daydream_button,
+                shutdown_hold_button=shutdown_hold_button,
+                shutdown_press_button=shutdown_press_button,
+            )
 
             # TODO: More cleanup
             if time.monotonic() >= next_change_time:
@@ -508,15 +526,24 @@ def main() -> None:
             elif status == "Next":
                 start_new = True
                 daydream = False
+                consecutive_daydreams = 0
                 break
             elif status == "Daydream":
                 start_new = True
                 daydream = True
+                consecutive_daydreams += 1
                 break
 
         # TODO: Major cleanup of the way daydreaming works. This is currently very messy.
 
         if start_new:
+            if consecutive_daydreams > max_consecutive_daydreams:
+                logger.info("Daydream limit reached")
+
+                next_change_time = time.monotonic() + random.randint(
+                    min_daydream_time, max_daydream_time
+                )
+                continue
             if not daydream:
                 logger.info("=== Starting new creation ===")
 

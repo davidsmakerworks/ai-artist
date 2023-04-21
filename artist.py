@@ -578,6 +578,7 @@ def main() -> None:
                 logger.debug("Recording...")
             else:
                 logger.info("=== Starting daydream ===")
+                ai_artist.reset()
 
             start_new = False
 

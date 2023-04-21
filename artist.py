@@ -44,6 +44,7 @@ import logging
 import random
 import os
 import string
+import time
 import wave
 
 import pygame
@@ -68,7 +69,9 @@ class Button(IntEnum):
     BTN_LS = 8
     BTN_RS = 9
 
-logger = logging.getLogger('ai-artist')
+
+logger = logging.getLogger("ai-artist")
+
 
 class Transcriber:
     def __init__(
@@ -99,11 +102,55 @@ class Transcriber:
             try:
                 response = openai.Audio.transcribe(model="whisper-1", file=f)
             except Exception as e:
-                logger.error(f'Transcriber response: {response}')
+                logger.error(f"Transcriber response: {response}")
                 logger.exception(e)
                 raise
 
         return response["text"]
+
+
+class ChatResponse:
+    def __init__(self, response: dict) -> None:
+        self._response = response
+
+    @property
+    def content(self) -> str:
+        return self._response["choices"][0]["message"]["content"]
+
+    @property
+    def total_tokens_used(self) -> int:
+        return self._response["usage"]["total_tokens"]
+
+
+class ChatCharacter:
+    def __init__(self, system_prompt: str) -> None:
+        self._system_prompt = system_prompt
+        self.reset()
+
+    def reset(self) -> None:
+        self._messages = [{"role": "system", "content": self._system_prompt}]
+
+    @property
+    def system_prompt(self) -> str:
+        return self._system_prompt
+
+    @system_prompt.setter
+    def system_prompt(self, prompt: str) -> None:
+        if self._messages[0]["role"] == "system":
+            self._messages[0]["content"] = prompt
+        else:
+            raise RuntimeError("Invalid structure of ChatCharacter._messages")
+
+    def get_chat_response(self, message: str) -> ChatResponse:
+        self._messages.append({"role": "user", "content": message})
+
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo", messages=self._messages
+        )
+
+        self._messages.append(response["choices"][0]["message"])
+
+        return ChatResponse(response)
 
 
 def init_display(width: int, height: int) -> pygame.Surface:
@@ -144,8 +191,7 @@ def speak_text(
     logger.info(f"Speaking: {text}")
     text_details = speech_svc.language + speech_svc.gender + speech_svc.voice + text
 
-    text_details_hash = hashlib.sha256(
-        text_details.encode("utf-8")).hexdigest()
+    text_details_hash = hashlib.sha256(text_details.encode("utf-8")).hexdigest()
 
     logger.debug(f"Text details: {text_details} - Hash: {text_details_hash}")
 
@@ -176,11 +222,15 @@ def check_for_event() -> Union[str, None]:
                 return "Quit"
             if event.key == K_SPACE:
                 return "Next"
+            if event.key == K_d:
+                return "Daydream"
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.button == Button.BTN_BACK:
                 return "Quit"
             if event.button == Button.BTN_A:
                 return "Next"
+            if event.button == Button.BTN_X:
+                return "Daydream"
 
     return None
 
@@ -204,7 +254,7 @@ def check_moderation(msg: str) -> bool:
     try:
         response = openai.Moderation.create(input=msg)
     except Exception as e:
-        logger.error(f'Moderation response: {response}')
+        logger.error(f"Moderation response: {response}")
         logger.exception(e)
         raise
 
@@ -212,31 +262,73 @@ def check_moderation(msg: str) -> bool:
 
     if flagged:
         logger.info(f"Message flagged by moderation: {msg}")
-        logger.info(f'Moderation response: {response}')
+        logger.info(f"Moderation response: {response}")
     else:
         logger.info(f"Moderation check passed")
 
     return not flagged
 
 
-def get_verse(system_prompt: str, base_prompt: str, user_prompt: str) -> str:
+def get_best_verse(
+    poet: ChatCharacter,
+    critic: ChatCharacter,
+    base_prompt: str,
+    user_prompt: str,
+    num_verses: int,
+) -> str:
     """
-    Get a verse from GPT chat completion.
+    Get num_verse verses from poet character, then use the critic character
+    to choose the best verse.
     """
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": base_prompt + " " + user_prompt},
-    ]
+
+    # Poet and critic are both single-turn characters, so we reset them
+    # before generating the verses.
+    poet.reset()
+    critic.reset()
+
+    verses: list[str] = []
+
+    for _ in range(num_verses):
+        # Generate a verse
+        try:
+            verse = poet.get_chat_response(base_prompt + " " + user_prompt).content
+        except Exception as e:
+            logger.error(f"Error getting verse from poet")
+            logger.exception(e)
+            raise
+
+        verses.append(verse)
+
+    critic_message = f"Theme: {user_prompt}\n"
+
+    for verse in enumerate(verses, start=1):
+        critic_message += f"Poem {verse[0]}: {verse[1]}\n"
+
+    logger.info(f"Critic message: {critic_message}")
+
+    chosen_poem = None
 
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo", messages=messages)
+        critic_verdict = critic.get_chat_response(critic_message).content
+        logger.info(f"Critic verdict: {critic_verdict}")
+
+        for c in critic_verdict:
+            if c.isdigit():
+                chosen_poem = int(c)
+                logger.debug(f"Chosen poem number: {chosen_poem}")
+                break
     except Exception as e:
-        logger.error(f'Chat completion response: {response}')
+        logger.error(f"Error getting verdict from critic")
         logger.exception(e)
         raise
 
-    return response["choices"][0]["message"]["content"]
+    if chosen_poem is not None:  # Maybe there could be an index 0 someday?
+        return verses[chosen_poem - 1]
+    else:
+        logger.warning(
+            f"No poem number found in critic verdict - returning random verse"
+        )
+        return random.choice(verses)
 
 
 def show_status_screen(
@@ -293,14 +385,15 @@ def main() -> None:
     console_handler.setLevel(logging.DEBUG)
 
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)-8s - %(message)s")
+        "%(asctime)s - %(name)s - %(levelname)-8s - %(message)s"
+    )
 
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
-    logger.info('*** Starting A.R.T.I.S.T. ***')
+    logger.info("*** Starting A.R.T.I.S.T. ***")
 
     cache_dir = config["speech_cache_dir"]
     transcribe_temp_dir = config["transcribe_temp_dir"]
@@ -327,8 +420,16 @@ def main() -> None:
 
     image_base_prompt = config["image_base_prompt"]
 
-    verse_system_prompt = config["verse_system_prompt"]
+    num_verses = config["num_verses"]
+
+    min_daydream_time = config["min_daydream_time"] * 60  # Convert to seconds
+    max_daydream_time = config["max_daydream_time"] * 60  # Convert to seconds
+
+    artist_system_prompt = config["artist_system_prompt"]
+    artist_base_prompt = config["artist_base_prompt"]
+    poet_system_prompt = config["poet_system_prompt"]
     verse_base_prompt = config["verse_base_prompt"]
+    critic_system_prompt = config["critic_system_prompt"]
 
     verse_font = config["verse_font"]
     verse_font_size = config["verse_font_size"]
@@ -354,12 +455,10 @@ def main() -> None:
     )
 
     logger.debug("Initializing audio player...")
-    audio_player = AudioPlayer(
-        sample_width=2, channels=1, rate=output_sample_rate)
+    audio_player = AudioPlayer(sample_width=2, channels=1, rate=output_sample_rate)
 
     logger.debug("Initializing audio recorder...")
-    audio_recorder = AudioRecorder(
-        sample_width=2, channels=1, rate=input_sample_rate)
+    audio_recorder = AudioRecorder(sample_width=2, channels=1, rate=input_sample_rate)
 
     logger.debug("Initializing transcriber...")
     transcriber = Transcriber(
@@ -369,7 +468,19 @@ def main() -> None:
         framerate=input_sample_rate,
     )
 
+    logger.debug("Initialzing autonomous AI artist...")
+    ai_artist = ChatCharacter(system_prompt=artist_system_prompt)
+
+    logger.debug("Initializing poet...")
+    poet = ChatCharacter(system_prompt=poet_system_prompt)
+
+    logger.debug("Initializing critic...")
+    critic = ChatCharacter(system_prompt=critic_system_prompt)
+
     start_new = True
+    daydream = False
+
+    msg = ""
 
     show_status_screen(
         surface=disp_surface,
@@ -378,9 +489,17 @@ def main() -> None:
         vert_margin=vert_margin,
     )
 
+    next_change_time = time.monotonic() + random.randint(
+        min_daydream_time, max_daydream_time
+    )
+
     while True:
         while True:
             status = check_for_event()
+
+            # TODO: More cleanup
+            if time.monotonic() >= next_change_time:
+                status = "Daydream"
 
             if status == "Quit":
                 logger.info("*** A.R.T.I.S.T. is shutting down. ***")
@@ -388,66 +507,99 @@ def main() -> None:
                 return
             elif status == "Next":
                 start_new = True
+                daydream = False
+                break
+            elif status == "Daydream":
+                start_new = True
+                daydream = True
                 break
 
+        # TODO: Major cleanup of the way daydreaming works. This is currently very messy.
+
         if start_new:
-            logger.info('=== Starting new creation ===')
-            show_status_screen(
-                surface=disp_surface,
-                text=" ",
-                horiz_margin=horiz_margin,
-                vert_margin=vert_margin,
-            )
-            pygame.display.update()
+            if not daydream:
+                logger.info("=== Starting new creation ===")
 
-            greeting_phrase = (
-                random.choice(config["welcome_words"])
-                + " "
-                + random.choice(config["welcome_lines"])
-            )
+                show_status_screen(
+                    surface=disp_surface,
+                    text=" ",
+                    horiz_margin=horiz_margin,
+                    vert_margin=vert_margin,
+                )
+                pygame.display.update()
 
-            speak_text(
-                text=greeting_phrase,
-                cache_dir=cache_dir,
-                player=audio_player,
-                speech_svc=speech_svc,
-            )
+                greeting_phrase = (
+                    random.choice(config["welcome_words"])
+                    + " "
+                    + random.choice(config["welcome_lines"])
+                )
 
-            show_status_screen(
-                surface=disp_surface,
-                text="Listening...",
-                horiz_margin=horiz_margin,
-                vert_margin=vert_margin,
-            )
+                speak_text(
+                    text=greeting_phrase,
+                    cache_dir=cache_dir,
+                    player=audio_player,
+                    speech_svc=speech_svc,
+                )
 
-            logger.debug("Recording...")
+                show_status_screen(
+                    surface=disp_surface,
+                    text="Listening...",
+                    horiz_margin=horiz_margin,
+                    vert_margin=vert_margin,
+                )
+
+                logger.debug("Recording...")
+            else:
+                logger.info("=== Starting daydream ===")
 
             start_new = False
 
         silent_loops = 0
 
         while silent_loops < 10:
-            (in_stream, valid_audio) = audio_recorder.record(max_recording_time)
+            if not daydream:
+                (in_stream, valid_audio) = audio_recorder.record(max_recording_time)
+            else:
+                valid_audio = True  # Messy, clean this up
 
             if valid_audio:
-                show_status_screen(
-                    surface=disp_surface,
-                    text="Working...",
-                    horiz_margin=horiz_margin,
-                    vert_margin=vert_margin,
-                )
-                working_phrase = random.choice(config["working_lines"])
+                if not daydream:
+                    show_status_screen(
+                        surface=disp_surface,
+                        text="Working...",
+                        horiz_margin=horiz_margin,
+                        vert_margin=vert_margin,
+                    )
+                    working_phrase = random.choice(config["working_lines"])
 
-                speak_text(
-                    text=working_phrase,
-                    cache_dir=cache_dir,
-                    player=audio_player,
-                    speech_svc=speech_svc,
-                )
+                    speak_text(
+                        text=working_phrase,
+                        cache_dir=cache_dir,
+                        player=audio_player,
+                        speech_svc=speech_svc,
+                    )
 
-                msg = transcriber.transcribe(audio_stream=in_stream)
+                    msg = transcriber.transcribe(audio_stream=in_stream)
 
-                logger.info(f"Transcribed: {msg}")
+                    logger.info(f"Transcribed: {msg}")
+                else:
+                    show_status_screen(
+                        surface=disp_surface,
+                        text="Daydreaming...",
+                        horiz_margin=horiz_margin,
+                        vert_margin=vert_margin,
+                    )
+
+                    if msg:
+                        msg = ai_artist.get_chat_response(
+                            message=artist_base_prompt + " " + msg
+                        ).content
+                    else:
+                        msg = ai_artist.get_chat_response(
+                            message=artist_base_prompt + " something completely random."
+                        ).content
+
+                    logger.info(f"Daydreamed: {msg}")
 
                 name = get_random_string(12)
 
@@ -460,7 +612,7 @@ def main() -> None:
 
                 can_create = check_moderation(img_prompt)
                 creation_failed = False
-                response = None # Clear out previous response
+                response = None  # Clear out previous response
 
                 if can_create:
                     try:
@@ -473,14 +625,15 @@ def main() -> None:
                         creation_failed = True
 
                     if not creation_failed:
-                        img_bytes = base64.b64decode(
-                            response["data"][0]["b64_json"])
+                        img_bytes = base64.b64decode(response["data"][0]["b64_json"])
 
-                        logger.debug("Getting verse...")
-                        verse = get_verse(
-                            system_prompt=verse_system_prompt,
+                        logger.debug("Getting best verse...")
+                        verse = get_best_verse(
+                            poet=poet,
+                            critic=critic,
                             base_prompt=verse_base_prompt,
                             user_prompt=msg,
+                            num_verses=num_verses,
                         )
 
                         verse_lines = verse.split("\n")
@@ -490,7 +643,7 @@ def main() -> None:
 
                         font_obj = pygame.font.SysFont(verse_font, verse_font_size)
                         longest_size = 0
-                        
+
                         # Need to check pizel size of each line to account for
                         # proprtional fonts. Assumes that size scales linearly.
                         for line in verse_lines:
@@ -540,33 +693,36 @@ def main() -> None:
                                 line, True, pygame.Color("white")
                             )
                             disp_surface.blit(
-                                text_surface_obj, (verse_x,
-                                                int((display_height / 2) + offset))
+                                text_surface_obj,
+                                (verse_x, int((display_height / 2) + offset)),
                             )
                             offset += int(total_height / len(verse_lines))
 
                         finished_phrase = random.choice(config["finished_lines"])
 
-                        speak_text(
-                            text=finished_phrase,
-                            cache_dir=cache_dir,
-                            player=audio_player,
-                            speech_svc=speech_svc,
-                        )
+                        if not daydream:
+                            speak_text(
+                                text=finished_phrase,
+                                cache_dir=cache_dir,
+                                player=audio_player,
+                                speech_svc=speech_svc,
+                            )
 
                         logger.debug("Saving image...")
                         with open(os.path.join(output_dir, name + ".png"), "wb") as f:
                             f.write(img_bytes)
 
-                        img = pygame.image.load(
-                            os.path.join(output_dir, name + ".png"))
+                        img = pygame.image.load(os.path.join(output_dir, name + ".png"))
                         disp_surface.blit(img, (img_x, vert_margin))
                         pygame.display.update()
 
                         logger.debug("Saving screenshot...")
                         pygame.image.save(
-                            disp_surface, os.path.join(
-                                output_dir, name + "-verse.png")
+                            disp_surface, os.path.join(output_dir, name + "-verse.png")
+                        )
+
+                        next_change_time = time.monotonic() + random.randint(
+                            min_daydream_time, max_daydream_time
                         )
                     else:
                         show_status_screen(

@@ -12,8 +12,8 @@
     "poet_system_prompt": "You are a poet who writes short light-hearted poems about various topics.",
     "verse_base_prompt": "Write one verse about ",
     "critic_system_prompt": "You are a poetry critic who evaluates poems to determine which best fits the specified theme. You respond with only the number of the best poem and no other words.",
-    "artist_system_prompt": "You are an artist who is inspired by various subjects. You imagine new subjects that are inspired by, but not directly related to, the subject you are given. You respond with one sentence about that new subject. You use the present and progressive tenses, not the past tense.",
-    "artist_base_prompt": "Write one sentence inspired by, but not directly related to, ",
+    "artist_system_prompt": "You are an imaginative artist who is inspired by various subjects. You imagine new scenes that are inspired by, but not very closely related to, the subject you are given. You respond with one sentence about that new scene. You use the present and progressive tenses, not the past tense.",
+    "artist_base_prompt": "Write one sentence inspired by, but not very closely related to, ",
     "num_verses": 3,
     "min_daydream_time": 10,
     "max_daydream_time": 60,
@@ -31,6 +31,10 @@
     "verse_font": "arial",
     "verse_font_size": 72,
     "verse_line_spacing": 10,
+    "status_font": "arial",
+    "status_heading1_size": 200,
+    "status_heading2_size": 60,
+    "status_status_size": 100,
     "welcome_words": [
         "Hello!",
         "Hi!",
@@ -44,6 +48,12 @@
         "What creation do you have in mind?",
         "What subject would you like me to create?",
         "What would you like me to paint for you?"
+    ],
+    "daydream_lines": [
+        "I'm thinking of something to create for you.",
+        "I'm thinking of some new inspiration.",
+        "I'm working on some new ideas for you.",
+        "I'm inspired by what I just created for you."
     ],
     "working_lines": [
         "Okay, I'm working on it now!",

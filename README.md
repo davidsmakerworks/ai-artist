@@ -10,7 +10,7 @@ Uses Azure Speech API to convert text to speech.
 
 Requries paid OpenAI API key and Azure Cognitive Services Speech Service (free tier)
 
-TODO: Clean up code related to new daydream feature
+TODO: Continue cleanup and refactor
 
 TODO: Configure days and times when automatic daydreaming occurs
 
@@ -18,6 +18,6 @@ TODO: Limit manual daydreams to X times in Y minutes
 
 TODO: Allow paging back through previous creations
 
-TODO: Display daydream-generated prompt before showing creation
+TODO: Add option (key/button) to show prompt on screen after creation is rendered
 
-TODO: Add voice to manual daydream invocations
+TODO: Bypass caching when speaking daydream prompts since these will always be unique

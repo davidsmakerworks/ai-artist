@@ -33,6 +33,7 @@ Uses Azure Speech API to convert text to speech.
 
 import base64
 import hashlib
+import io
 import json
 import logging
 import random
@@ -112,11 +113,13 @@ def init_joystick() -> Union[pygame.joystick.JoystickType, None]:
 
 
 def speak_text(
-    text: str, cache_dir: str, player: AudioPlayer, speech_svc: AzureSpeech
+    text: str, cache_dir: str, player: AudioPlayer, speech_svc: AzureSpeech, use_cache: bool = True
 ) -> None:
     """
     Speak text using Azure Speech API.
-    Cache audio files to avoid unnecessary API calls.
+
+    Caches audio files to avoid unnecessary API calls, but allows for bypassing caching
+    when speaking lines that will be unique.
     """
     logger.info(f"Speaking: {text}")
     text_details = speech_svc.language + speech_svc.gender + speech_svc.voice + text
@@ -125,21 +128,26 @@ def speak_text(
 
     logger.debug(f"Text details: {text_details} - Hash: {text_details_hash}")
 
-    filename = os.path.join(cache_dir, f"{text_details_hash}.wav")
+    if use_cache:
+        filename = os.path.join(cache_dir, f"{text_details_hash}.wav")
 
-    if not os.path.exists(filename):
-        logger.debug(f"Cache miss - generating audio file: {filename}")
+        if not os.path.exists(filename):
+            logger.debug(f"Cache miss - generating audio file: {filename}")
+            audio_data = speech_svc.text_to_speech(text)
+
+            with wave.open(filename, "wb") as f:
+                f.setnchannels(player.channels)
+                f.setsampwidth(player.sample_width)
+                f.setframerate(player.rate)
+                f.writeframes(audio_data)
+
+        with wave.open(filename, "rb") as f:
+            logger.debug(f"Playing audio file: {filename}")
+            player.play(f.readframes(f.getnframes()))
+    else:
         audio_data = speech_svc.text_to_speech(text)
 
-        with wave.open(filename, "wb") as f:
-            f.setnchannels(player.channels)
-            f.setsampwidth(player.sample_width)
-            f.setframerate(player.rate)
-            f.writeframes(audio_data)
-
-    with wave.open(filename, "rb") as f:
-        logger.debug(f"Playing audio file: {filename}")
-        player.play(f.readframes(f.getnframes()))
+        player.play(audio_data)
 
 
 def check_for_event(
@@ -175,12 +183,12 @@ def check_for_event(
 
 def get_random_string(length: int) -> str:
     """
-    Generate a random string of lowercase letters.
+    Generate a random string of lowercase letters and digits.
 
     Used for generating unique filenames.
     """
-    letters = string.ascii_lowercase
-    return "".join(random.choice(letters) for i in range(length))
+    chars = string.ascii_lowercase + string.digits
+    return "".join(random.choices(chars, k=length))
 
 
 def check_moderation(msg: str) -> bool:
@@ -316,6 +324,9 @@ def main() -> None:
     cache_dir = config["speech_cache_dir"]
     output_dir = config["output_dir"]
 
+    storage_account = config["storage_account"]
+    storage_container = config["storage_container"]
+
     input_sample_rate = config["input_sample_rate"]
     output_sample_rate = config["output_sample_rate"]
 
@@ -366,10 +377,11 @@ def main() -> None:
 
     logger.debug("Initializing storage...")
     blob_service_client = BlobServiceClient(
-        account_url=f"https://{config['storage_account']}.blob.core.windows.net", credential=azure_storage_key
+        account_url=f"https://{storage_account}.blob.core.windows.net",
+        credential=azure_storage_key,
     )
     blob_container_client = blob_service_client.get_container_client(
-        container=config["storage_container"]
+        container=storage_container
     )
 
     logger.debug("Initializing audio player...")
@@ -460,11 +472,18 @@ def main() -> None:
                 consecutive_daydreams += 1
                 break
             elif status == "QR":
-                img_url = f"https://{config['storage_account']}.blob.core.windows.net/{config['storage_container']}/{name}.png"
+                img_url = f"https://{storage_account}.blob.core.windows.net/{storage_container}/{base_file_name}.png"
                 qr_img = qrcode.make(img_url)
-                qr_img.save(os.path.join(cache_dir, "qr.png"))
+                qr_img_data = io.BytesIO()
 
-                qr_surf = pygame.image.load(os.path.join(cache_dir, "qr.png"))
+                qr_img.save(qr_img_data, format="PNG")
+                qr_img_data.seek(
+                    0
+                )  # Need to return pointer to start of data before reading
+
+                # "qr.png" is a name hint to assist in file format detection, not
+                # an actual file on disk
+                qr_surf = pygame.image.load(qr_img_data, "qr.png")
 
                 qr_width = qr_surf.get_width()
                 qr_height = qr_surf.get_height()
@@ -490,7 +509,7 @@ def main() -> None:
                 min_daydream_time, max_daydream_time
             )
             continue
-        
+
         if not daydream:
             logger.info("=== Starting new creation ===")
 
@@ -548,7 +567,7 @@ def main() -> None:
                     break
                 else:
                     silent_loops += 1
-            
+
             if not audio_detected:
                 logger.debug("Silence detected")
                 show_status_screen(
@@ -574,6 +593,7 @@ def main() -> None:
                     cache_dir=cache_dir,
                     player=audio_player,
                     speech_svc=speech_svc,
+                    use_cache=False,
                 )
 
             if previous_user_prompt:
@@ -587,11 +607,11 @@ def main() -> None:
 
             logger.info(f"Daydreamed: {user_prompt}")
 
-        name = get_random_string(12)
+        base_file_name = get_random_string(config["file_name_length"])
 
-        logger.info(f"Base name: {name}")
+        logger.info(f"Base name: {base_file_name}")
 
-        with open(os.path.join(output_dir, name + ".txt"), "w") as f:
+        with open(os.path.join(output_dir, base_file_name + ".txt"), "w") as f:
             f.write(user_prompt)
 
         img_prompt = config["image_base_prompt"] + user_prompt
@@ -604,7 +624,10 @@ def main() -> None:
         if can_create:
             try:
                 response = openai.Image.create(
-                    prompt=img_prompt, size=img_size, response_format="b64_json"
+                    prompt=img_prompt,
+                    size=img_size,
+                    response_format="b64_json",
+                    user="A.R.T.I.S.T.",
                 )
             except Exception as e:
                 logger.error(f"Image creation response: {response}")
@@ -639,6 +662,7 @@ def main() -> None:
                         player=audio_player,
                         speech_svc=speech_svc,
                     )
+
                 # Only speak prompt if daydream was manually initiated
                 elif status == "Daydream":
                     speak_text(
@@ -649,14 +673,16 @@ def main() -> None:
                     )
 
                 logger.debug("Saving image...")
-                with open(os.path.join(output_dir, name + "-raw.png"), "wb") as f:
+                with open(
+                    os.path.join(output_dir, base_file_name + "-raw.png"), "wb"
+                ) as f:
                     f.write(img_bytes)
 
-                img = pygame.image.load(os.path.join(output_dir, name + "-raw.png"))
-
-                creation = ArtistCreation(
-                    img, verse_lines, user_prompt, daydream
+                img = pygame.image.load(
+                    os.path.join(output_dir, base_file_name + "-raw.png")
                 )
+
+                creation = ArtistCreation(img, verse_lines, user_prompt, daydream)
                 artist_canvas.render_creation(creation, img_side)
 
                 disp_surface.blit(artist_canvas.surface, (0, 0))
@@ -665,20 +691,18 @@ def main() -> None:
 
                 logger.debug("Saving creation...")
                 pygame.image.save(
-                    disp_surface, os.path.join(output_dir, name + ".png")
+                    disp_surface, os.path.join(output_dir, base_file_name + ".png")
                 )
 
                 logger.debug("Uploading creation...")
-                with open(os.path.join(output_dir, name + ".png"), "rb") as f:
+                with open(os.path.join(output_dir, base_file_name + ".png"), "rb") as f:
                     try:
                         blob_container_client.upload_blob(
-                            name=name + ".png", data=f, overwrite=True
+                            name=base_file_name + ".png", data=f, overwrite=True
                         )
                     except Exception as e:
-                        logger.error('Error uploading image to blob storage')
+                        logger.error("Error uploading image to blob storage")
                         logger.exception(e)
-
-                
 
                 next_change_time = time.monotonic() + random.randint(
                     min_daydream_time, max_daydream_time

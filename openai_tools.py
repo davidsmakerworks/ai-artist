@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 
+import io
 import logging
 import os
 import wave
@@ -43,12 +44,9 @@ class Transcriber:
     def transcribe(self, audio_stream: bytes) -> str:
         """
         Transcribe audio stream to text.
-
-        TODO: Find a way to do this in memory without temporary file
         """
-        temp_file_name = os.path.join(self.temp_dir, "input_audio.wav")
-
-        writer = wave.open(temp_file_name, "wb")
+        audio_data = io.BytesIO()
+        writer = wave.open(audio_data, "wb")
 
         writer.setnchannels(self.channels)
         writer.setsampwidth(self.sample_width)
@@ -56,13 +54,17 @@ class Transcriber:
 
         writer.writeframes(audio_stream)
 
-        with open(temp_file_name, "rb") as f:
-            try:
-                response = openai.Audio.transcribe(model="whisper-1", file=f)
-            except Exception as e:
-                logger.error(f"Transcriber response: {response}")
-                logger.exception(e)
-                raise
+        writer.close()
+        
+        audio_data.seek(0)
+        audio_data.name = "audio.wav" # Name hint only, not a file on disk
+
+        try:
+            response = openai.Audio.transcribe(model="whisper-1", file=audio_data)
+        except Exception as e:
+            logger.error(f"Transcriber response: {response}")
+            logger.exception(e)
+            raise
 
         return response["text"]
 

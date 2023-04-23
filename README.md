@@ -22,6 +22,4 @@ TODO: Allow paging back through previous creations
 
 TODO: Add option (key/button) to show prompt on screen after creation is rendered
 
-TODO: Bypass caching when speaking daydream prompts since these will always be unique
-
-TODO: Clean up QR code display code and remove use of temp file
+TODO: Clean up QR code display code

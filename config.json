@@ -2,6 +2,7 @@
     "speech_cache_dir": "cache",
     "transcribe_temp_dir": "cache",
     "output_dir": "output",
+    "file_name_length": 16,
     "speech_language": "en-US",
     "speech_gender": "Female",
     "speech_voice": "en-US-CoraNeural",

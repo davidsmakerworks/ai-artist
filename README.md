@@ -23,3 +23,5 @@ TODO: Allow paging back through previous creations
 TODO: Add option (key/button) to show prompt on screen after creation is rendered
 
 TODO: Clean up QR code display code
+
+TODO: Improve HTML template, add CSS

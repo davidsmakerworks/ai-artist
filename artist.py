@@ -49,9 +49,9 @@ import openai
 from artist_classes import ArtistCanvas, ArtistCreation, StatusScreen
 from audio_tools import AudioPlayer, AudioRecorder
 from azure_speech import AzureSpeech
-from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
+from azure.storage.blob import BlobServiceClient, ContentSettings
 from log_config import create_global_logger
-from openai_tools import ChatCharacter, ChatResponse, Transcriber
+from openai_tools import ChatCharacter, Transcriber
 from pygame.locals import *
 from typing import Union
 
@@ -113,7 +113,11 @@ def init_joystick() -> Union[pygame.joystick.JoystickType, None]:
 
 
 def speak_text(
-    text: str, cache_dir: str, player: AudioPlayer, speech_svc: AzureSpeech, use_cache: bool = True
+    text: str,
+    cache_dir: str,
+    player: AudioPlayer,
+    speech_svc: AzureSpeech,
+    use_cache: bool = True,
 ) -> None:
     """
     Speak text using Azure Speech API.
@@ -472,7 +476,7 @@ def main() -> None:
                 consecutive_daydreams += 1
                 break
             elif status == "QR":
-                img_url = f"https://{storage_account}.blob.core.windows.net/{storage_container}/{base_file_name}.png"
+                img_url = f"https://{storage_account}.blob.core.windows.net/{storage_container}/{base_file_name}.html"
                 qr_img = qrcode.make(img_url)
                 qr_img_data = io.BytesIO()
 
@@ -493,10 +497,9 @@ def main() -> None:
 
                 disp_surface.blit(qr_surf, (qr_x_pos, qr_y_pos))
                 pygame.display.update()
-                time.sleep(10)
+                time.sleep(config["qr_display_time"])
 
                 disp_surface.blit(artist_canvas.surface, (0, 0))
-
                 pygame.display.update()
 
                 # Don't break out of the loop after QR has been shown since no
@@ -611,9 +614,6 @@ def main() -> None:
 
         logger.info(f"Base name: {base_file_name}")
 
-        with open(os.path.join(output_dir, base_file_name + ".txt"), "w") as f:
-            f.write(user_prompt)
-
         img_prompt = config["image_base_prompt"] + user_prompt
         previous_user_prompt = user_prompt
 
@@ -673,35 +673,68 @@ def main() -> None:
                     )
 
                 logger.debug("Saving image...")
-                with open(
-                    os.path.join(output_dir, base_file_name + "-raw.png"), "wb"
-                ) as f:
+                raw_image_file_name = base_file_name + "-raw.png"
+
+                with open(os.path.join(output_dir, raw_image_file_name), "wb") as f:
                     f.write(img_bytes)
 
-                img = pygame.image.load(
-                    os.path.join(output_dir, base_file_name + "-raw.png")
-                )
+                img = pygame.image.load(os.path.join(output_dir, raw_image_file_name))
 
                 creation = ArtistCreation(img, verse_lines, user_prompt, daydream)
                 artist_canvas.render_creation(creation, img_side)
-
                 disp_surface.blit(artist_canvas.surface, (0, 0))
-
                 pygame.display.update()
 
                 logger.debug("Saving creation...")
+                screenshot_file_name = base_file_name + ".png"
                 pygame.image.save(
-                    disp_surface, os.path.join(output_dir, base_file_name + ".png")
+                    disp_surface, os.path.join(output_dir, screenshot_file_name)
                 )
 
                 logger.debug("Uploading creation...")
-                with open(os.path.join(output_dir, base_file_name + ".png"), "rb") as f:
+                image_url = f"https://{storage_account}.blob.core.windows.net/{storage_container}/{screenshot_file_name}"
+
+                html_file_name = base_file_name + ".html"
+
+                with open(config["html_template"], "r") as template_file:
+                    with open(
+                        os.path.join(output_dir, html_file_name), "w"
+                    ) as output_html_file:
+                        for line in template_file:
+                            out_line = line.replace("***IMG-URL***", image_url)
+                            out_line = out_line.replace("***PROMPT***", user_prompt)
+                            out_line = out_line.replace(
+                                "***GEN-BY***",
+                                "A.R.T.I.S.T. Daydream" if daydream else "User Request",
+                            )
+                            out_line = out_line.replace("***TIME***", time.asctime())
+
+                            output_html_file.write(out_line)
+
+                with open(os.path.join(output_dir, html_file_name), "rb") as f:
                     try:
+                        content_settings = ContentSettings(content_type="text/html")
                         blob_container_client.upload_blob(
-                            name=base_file_name + ".png", data=f, overwrite=True
+                            name=base_file_name + ".html",
+                            data=f,
+                            overwrite=True,
+                            content_settings=content_settings,
                         )
                     except Exception as e:
-                        logger.error("Error uploading image to blob storage")
+                        logger.error("Error uploading HTML to blob storage")
+                        logger.exception(e)
+
+                with open(os.path.join(output_dir, screenshot_file_name), "rb") as f:
+                    try:
+                        content_settings = ContentSettings(content_type="image/png")
+                        blob_container_client.upload_blob(
+                            name=screenshot_file_name,
+                            data=f,
+                            overwrite=True,
+                            content_settings=content_settings,
+                        )
+                    except Exception as e:
+                        logger.error("Error uploading screenshot to blob storage")
                         logger.exception(e)
 
                 next_change_time = time.monotonic() + random.randint(

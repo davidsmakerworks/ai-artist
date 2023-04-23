@@ -29,12 +29,6 @@ Uses OpenAI's DALL-E 2 to generate images, GPT-3.5 Chat to generate verses
 and Whisper API to transcribe speech.
 
 Uses Azure Speech API to convert text to speech.
-
-TODO: General cleanup and structural improvements
-
-TODO: Improve logging to eliminate global logger object
-
-TODO: Upload results to a site so users can download their creations
 """
 
 import base64
@@ -48,11 +42,13 @@ import time
 import wave
 
 import pygame
+import qrcode
 import openai
 
 from artist_classes import ArtistCanvas, ArtistCreation, StatusScreen
 from audio_tools import AudioPlayer, AudioRecorder
 from azure_speech import AzureSpeech
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from log_config import create_global_logger
 from openai_tools import ChatCharacter, ChatResponse, Transcriber
 from pygame.locals import *
@@ -64,11 +60,13 @@ class ButtonConfig:
         self,
         generate_button: int,
         daydream_button: int,
+        reveal_qr_button: int,
         shutdown_hold_button: int,
         shutdown_press_button: int,
     ) -> None:
         self.generate_button = generate_button
         self.daydream_button = daydream_button
+        self.reveal_qr_button = reveal_qr_button
         self.shutdown_hold_button = shutdown_hold_button
         self.shutdown_press_button = shutdown_press_button
 
@@ -159,6 +157,8 @@ def check_for_event(
                 return "New"
             if event.key == K_d:
                 return "Daydream"
+            if event.key == K_q:
+                return "QR"
         elif js and event.type == pygame.JOYBUTTONDOWN:
             if event.button == button_config.shutdown_press_button:
                 if js.get_button(button_config.shutdown_hold_button):
@@ -167,6 +167,8 @@ def check_for_event(
                 return "New"
             if event.button == button_config.daydream_button:
                 return "Daydream"
+            if event.button == button_config.reveal_qr_button:
+                return "QR"
 
     return None
 
@@ -294,8 +296,9 @@ def main() -> None:
         openai.api_key = os.environ["OPENAI_API_KEY"]
         azure_speech_region = os.environ["AZURE_SPEECH_REGION"]
         azure_speech_key = os.environ["AZURE_SPEECH_KEY"]
+        azure_storage_key = os.environ["AZURE_STORAGE_KEY"]
     except KeyError:
-        print("Please set environment variables for OpenAI and Azure Speech.")
+        print("Please set environment variables for OpenAI and Azure.")
         return
 
     try:
@@ -332,6 +335,7 @@ def main() -> None:
     button_config = ButtonConfig(
         generate_button=config["generate_button"],
         daydream_button=config["daydream_button"],
+        reveal_qr_button=config["reveal_qr_button"],
         shutdown_hold_button=config["shutdown_hold_button"],
         shutdown_press_button=config["shutdown_press_button"],
     )
@@ -358,6 +362,14 @@ def main() -> None:
         language=config["speech_language"],
         gender=config["speech_gender"],
         voice=config["speech_voice"],
+    )
+
+    logger.debug("Initializing storage...")
+    blob_service_client = BlobServiceClient(
+        account_url=f"https://{config['storage_account']}.blob.core.windows.net", credential=azure_storage_key
+    )
+    blob_container_client = blob_service_client.get_container_client(
+        container=config["storage_container"]
     )
 
     logger.debug("Initializing audio player...")
@@ -421,6 +433,8 @@ def main() -> None:
     )
 
     while True:
+        # Clear any accumulated events
+        _ = pygame.event.get()
         while True:
             status = check_for_event(
                 js=js,
@@ -445,6 +459,29 @@ def main() -> None:
                 daydream = True
                 consecutive_daydreams += 1
                 break
+            elif status == "QR":
+                img_url = f"https://{config['storage_account']}.blob.core.windows.net/{config['storage_container']}/{name}.png"
+                qr_img = qrcode.make(img_url)
+                qr_img.save(os.path.join(cache_dir, "qr.png"))
+
+                qr_surf = pygame.image.load(os.path.join(cache_dir, "qr.png"))
+
+                qr_width = qr_surf.get_width()
+                qr_height = qr_surf.get_height()
+
+                qr_x_pos = (display_width - qr_width) // 2
+                qr_y_pos = (display_height - qr_height) // 2
+
+                disp_surface.blit(qr_surf, (qr_x_pos, qr_y_pos))
+                pygame.display.update()
+                time.sleep(10)
+
+                disp_surface.blit(artist_canvas.surface, (0, 0))
+
+                pygame.display.update()
+
+                # Don't break out of the loop after QR has been shown since no
+                # further action is required
 
         if consecutive_daydreams > max_consecutive_daydreams:
             logger.info("Daydream limit reached")
@@ -612,10 +649,10 @@ def main() -> None:
                     )
 
                 logger.debug("Saving image...")
-                with open(os.path.join(output_dir, name + ".png"), "wb") as f:
+                with open(os.path.join(output_dir, name + "-raw.png"), "wb") as f:
                     f.write(img_bytes)
 
-                img = pygame.image.load(os.path.join(output_dir, name + ".png"))
+                img = pygame.image.load(os.path.join(output_dir, name + "-raw.png"))
 
                 creation = ArtistCreation(
                     img, verse_lines, user_prompt, daydream
@@ -626,10 +663,22 @@ def main() -> None:
 
                 pygame.display.update()
 
-                logger.debug("Saving screenshot...")
+                logger.debug("Saving creation...")
                 pygame.image.save(
-                    disp_surface, os.path.join(output_dir, name + "-verse.png")
+                    disp_surface, os.path.join(output_dir, name + ".png")
                 )
+
+                logger.debug("Uploading creation...")
+                with open(os.path.join(output_dir, name + ".png"), "rb") as f:
+                    try:
+                        blob_container_client.upload_blob(
+                            name=name + ".png", data=f, overwrite=True
+                        )
+                    except Exception as e:
+                        logger.error('Error uploading image to blob storage')
+                        logger.exception(e)
+
+                
 
                 next_change_time = time.monotonic() + random.randint(
                     min_daydream_time, max_daydream_time

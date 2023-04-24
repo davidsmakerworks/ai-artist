@@ -462,6 +462,7 @@ def main() -> None:
                 status = "Auto-Daydream"
                 daydream = True
                 consecutive_daydreams += 1
+                break
 
             if status == "Quit":
                 logger.info("*** A.R.T.I.S.T. is shutting down. ***")

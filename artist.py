@@ -452,6 +452,9 @@ def main() -> None:
         # Clear any accumulated events
         _ = pygame.event.get()
         while True:
+            # Slow down loop to reduce power consumption
+            time.sleep(0.1)
+            
             status = check_for_event(
                 js=js,
                 button_config=button_config,

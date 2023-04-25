@@ -12,7 +12,7 @@
     "input_sample_rate": 8000,
     "output_sample_rate": 16000,
     "max_recording_time": 10,
-    "qr_display_time": 10,
+    "qr_display_time": 15,
     "image_base_prompt": "A detailed oil painting of ",
     "poet_system_prompt": "You are a poet who writes short light-hearted poems about various topics.",
     "verse_base_prompt": "Write one verse about ",
@@ -22,7 +22,11 @@
     "num_verses": 3,
     "min_daydream_time": 10,
     "max_daydream_time": 60,
-    "max_consecutive_daydreams": 5,
+    "daydream_iso_weekdays": [ 1, 2, 3, 4, 5 ],
+    "daydream_start_hour": 7,
+    "daydream_end_hour": 5,
+    "manual_daydream_window": 60,
+    "manual_daydream_limit": 6,
     "generate_button": 3,
     "daydream_button": 1,
     "reveal_qr_button": 0,
@@ -78,5 +82,11 @@
         "I'm sorry, I couldn't paint that for you.",
         "I'm sorry, I couldn't make that for you.",
         "I'm sorry, I can't create that for you."
+    ],
+    "daydream_refusal_lines": [
+        "I'd like you to give me a new idea instead.",
+        "I don't have any new ideas right now.",
+        "Could you give me a new idea instead?",
+        "I'm not feeling inspired right now."
     ]
 }

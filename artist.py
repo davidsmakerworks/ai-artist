@@ -29,9 +29,12 @@ Uses OpenAI's DALL-E 2 to generate images, GPT-3.5 Chat to generate verses
 and Whisper API to transcribe speech.
 
 Uses Azure Speech API to convert text to speech.
+
+Uses Azure Blob Storage to store downloadable images.
 """
 
 import base64
+import datetime
 import hashlib
 import io
 import json
@@ -360,7 +363,7 @@ def main() -> None:
     min_daydream_time = config["min_daydream_time"] * 60  # Convert to seconds
     max_daydream_time = config["max_daydream_time"] * 60  # Convert to seconds
 
-    max_consecutive_daydreams = config["max_consecutive_daydreams"]
+    manual_daydream_window = config["manual_daydream_window"] * 60  # Convert to seconds
 
     random.seed()
 
@@ -434,8 +437,7 @@ def main() -> None:
     )
 
     daydream = False
-
-    consecutive_daydreams = 0
+    manual_daydream_timestamps = []
 
     previous_user_prompt = ""
     user_prompt = ""
@@ -451,21 +453,37 @@ def main() -> None:
     while True:
         # Clear any accumulated events
         _ = pygame.event.get()
+
         while True:
             # Slow down loop to reduce power consumption
             time.sleep(0.1)
-            
+
+            if manual_daydream_timestamps:
+                if (
+                    time.monotonic() - manual_daydream_timestamps[0]
+                    > manual_daydream_window
+                ):
+                    logger.debug(
+                        f"Removing expired daydream timestamp {manual_daydream_timestamps[0]} at {time.monotonic()}"
+                    )
+                    manual_daydream_timestamps = manual_daydream_timestamps[1:]
+
             status = check_for_event(
                 js=js,
                 button_config=button_config,
             )
 
-            # TODO: More cleanup?
-            if time.monotonic() >= next_change_time:
-                status = "Auto-Daydream"
-                daydream = True
-                consecutive_daydreams += 1
-                break
+            time_now = datetime.datetime.now()
+
+            if (
+                time_now.hour >= config["daydream_start_hour"]
+                and time_now.hour < config["daydream_end_hour"]
+                and time_now.isoweekday() in config["daydream_iso_weekdays"]
+            ):
+                if time.monotonic() >= next_change_time:
+                    status = "Auto-Daydream"
+                    daydream = True
+                    break
 
             if status == "Quit":
                 logger.info("*** A.R.T.I.S.T. is shutting down. ***")
@@ -473,49 +491,54 @@ def main() -> None:
                 return
             elif status == "New":
                 daydream = False
-                consecutive_daydreams = 0
                 break
             elif status == "Daydream":
-                daydream = True
-                consecutive_daydreams += 1
-                break
+                if len(manual_daydream_timestamps) < config["manual_daydream_limit"]:
+                    daydream_timestamp = time.monotonic()
+
+                    logger.debug(f"Manual daydream request at {daydream_timestamp}.")
+                    manual_daydream_timestamps.append(daydream_timestamp)
+                    daydream = True
+                    break
+                else:
+                    speak_text(
+                        text=random.choice(config["daydream_refusal_lines"]),
+                        cache_dir=cache_dir,
+                        player=audio_player,
+                        speech_svc=speech_svc,
+                    )
+                    logger.debug("Manual daydream request refused.")
             elif status == "QR":
-                img_url = f"https://{storage_account}.blob.core.windows.net/{storage_container}/{base_file_name}.html"
-                qr_img = qrcode.make(img_url)
-                qr_img_data = io.BytesIO()
+                # Quick way to make sure a creation has already been generated
+                if base_file_name:
+                    img_url = f"https://{storage_account}.blob.core.windows.net/{storage_container}/{base_file_name}.html"
+                    qr_img = qrcode.make(img_url)
+                    qr_img_data = io.BytesIO()
 
-                qr_img.save(qr_img_data, format="PNG")
-                qr_img_data.seek(
-                    0
-                )  # Need to return pointer to start of data before reading
+                    qr_img.save(qr_img_data, format="PNG")
 
-                # "qr.png" is a name hint to assist in file format detection, not
-                # an actual file on disk
-                qr_surf = pygame.image.load(qr_img_data, "qr.png")
+                    # Need to return pointer to start of data before reading
+                    qr_img_data.seek(0)
 
-                qr_width = qr_surf.get_width()
-                qr_height = qr_surf.get_height()
+                    # "qr.png" is a name hint to assist in file format detection, not
+                    # an actual file on disk
+                    qr_surf = pygame.image.load(qr_img_data, "qr.png")
 
-                qr_x_pos = (display_width - qr_width) // 2
-                qr_y_pos = (display_height - qr_height) // 2
+                    qr_width = qr_surf.get_width()
+                    qr_height = qr_surf.get_height()
 
-                disp_surface.blit(qr_surf, (qr_x_pos, qr_y_pos))
-                pygame.display.update()
-                time.sleep(config["qr_display_time"])
+                    qr_x_pos = (display_width - qr_width) // 2
+                    qr_y_pos = (display_height - qr_height) // 2
 
-                disp_surface.blit(artist_canvas.surface, (0, 0))
-                pygame.display.update()
+                    disp_surface.blit(qr_surf, (qr_x_pos, qr_y_pos))
+                    pygame.display.update()
+                    time.sleep(config["qr_display_time"])
 
-                # Don't break out of the loop after QR has been shown since no
-                # further action is required
+                    disp_surface.blit(artist_canvas.surface, (0, 0))
+                    pygame.display.update()
 
-        if consecutive_daydreams > max_consecutive_daydreams:
-            logger.info("Daydream limit reached")
-
-            next_change_time = time.monotonic() + random.randint(
-                min_daydream_time, max_daydream_time
-            )
-            continue
+                    # Don't break out of the loop after QR has been shown since no
+                    # further action is required
 
         if not daydream:
             logger.info("=== Starting new creation ===")

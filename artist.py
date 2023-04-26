@@ -479,11 +479,11 @@ def main() -> None:
                 time_now.hour >= config["daydream_start_hour"]
                 and time_now.hour < config["daydream_end_hour"]
                 and time_now.isoweekday() in config["daydream_iso_weekdays"]
+                and time.monotonic() >= next_change_time
             ):
-                if time.monotonic() >= next_change_time:
-                    status = "Auto-Daydream"
-                    daydream = True
-                    break
+                status = "Auto-Daydream"
+                daydream = True
+                break
 
             if status == "Quit":
                 logger.info("*** A.R.T.I.S.T. is shutting down. ***")

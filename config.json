@@ -24,7 +24,7 @@
     "max_daydream_time": 60,
     "daydream_iso_weekdays": [ 1, 2, 3, 4, 5 ],
     "daydream_start_hour": 7,
-    "daydream_end_hour": 5,
+    "daydream_end_hour": 17,
     "manual_daydream_window": 60,
     "manual_daydream_limit": 6,
     "generate_button": 3,

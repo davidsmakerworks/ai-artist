@@ -65,12 +65,14 @@ class ButtonConfig:
         generate_button: int,
         daydream_button: int,
         reveal_qr_button: int,
+        reveal_prompt_button: int,
         shutdown_hold_button: int,
         shutdown_press_button: int,
     ) -> None:
         self.generate_button = generate_button
         self.daydream_button = daydream_button
         self.reveal_qr_button = reveal_qr_button
+        self.reveal_prompt_button = reveal_prompt_button
         self.shutdown_hold_button = shutdown_hold_button
         self.shutdown_press_button = shutdown_press_button
 
@@ -172,8 +174,14 @@ def check_for_event(
                 return "New"
             if event.key == K_d:
                 return "Daydream"
+            if event.key == K_p:
+                return "Prompt"
             if event.key == K_q:
                 return "QR"
+            if event.key == K_RIGHT:
+                return "Next-Recent"
+            if event.key == K_LEFT:
+                return "Previous-Recent"
         elif js and event.type == pygame.JOYBUTTONDOWN:
             if event.button == button_config.shutdown_press_button:
                 if js.get_button(button_config.shutdown_hold_button):
@@ -182,8 +190,15 @@ def check_for_event(
                 return "New"
             if event.button == button_config.daydream_button:
                 return "Daydream"
+            if event.button == button_config.reveal_prompt_button:
+                return "Prompt"
             if event.button == button_config.reveal_qr_button:
                 return "QR"
+        elif js and event.type == pygame.JOYAXISMOTION:
+            if event.axis == 0 and event.value < -0.5:
+                return "Previous-Recent"
+            if event.axis == 0 and event.value > 0.5:
+                return "Next-Recent"
 
     return None
 
@@ -285,6 +300,71 @@ def get_best_verse(
         return random.choice(verses)
 
 
+def get_prompt_surface(prompt: str, prompt_source: str, width: int, height: int, font_name: str, font_size: int) -> pygame.Surface:
+    """
+    Get a surface with the prompt text rendered on it.
+
+    TODO: Major cleanup and remove magic numbers
+    """
+    prompt_surface = pygame.Surface((width, height))
+    prompt_surface.fill(pygame.Color('yellow'))
+
+    text_surface = pygame.Surface((width - 20, height - 20))
+    text_surface.fill(pygame.Color('black'))
+
+    text_subsurface = pygame.Surface((width - 40, height - 40))
+    text_subsurface.fill(pygame.Color('black'))
+
+    prompt = "Prompt: " + prompt
+    prompt_source = "Source: " + prompt_source
+
+    font = pygame.font.SysFont(font_name, font_size)
+
+    prompt_words = prompt.split()
+    
+    line = ""
+    y_pos = 0
+
+    total_height = 0
+
+    for word in prompt_words:
+        previous_line = line
+        line += word + " "
+
+        line_width = font.size(line)[0]
+        line_height = font.size(line)[1]
+
+        if line_width > width - 80:
+            line_surface = font.render(previous_line, True, pygame.Color('white'))
+            logger.debug(f"Rendering word-wrapped prompt line: {previous_line}")
+            text_subsurface.blit(line_surface, (10, y_pos))
+
+            line = word + " "
+            y_pos += line_height
+            total_height += line_height
+
+    # Render any remaining words
+    if line.strip():
+        line_surface = font.render(line, True, pygame.Color('white'))
+        logger.debug(f"Rendering prompt line: {line}")
+        text_subsurface.blit(line_surface, (10, y_pos))
+        total_height += line_height
+
+    # Leave blank line before prompt source
+    y_pos += line_height * 2
+    total_height += line_height
+    
+    line_surface = font.render(prompt_source, True, pygame.Color('white'))
+    total_height += line_height
+    logger.debug(f"Rendering prompt source line: {prompt_source}")
+    text_subsurface.blit(line_surface, (10, y_pos))
+
+    text_surface.blit(text_subsurface, (10, (text_subsurface.get_height() - total_height) // 2))
+
+    prompt_surface.blit(text_surface, (10, 10))
+
+    return prompt_surface
+
 def show_status_screen(
     surface: pygame.Surface, text: str, status_screen_obj: StatusScreen
 ) -> None:
@@ -304,6 +384,21 @@ def update_display(
     """
     display_surface.blit(content_surface, (0, 0))
     pygame.display.update()
+
+
+def load_recents(recents_file_name: str) -> list:
+    try:
+        with open(recents_file_name, "r") as recents_file:
+            recents = json.load(recents_file)
+    except FileNotFoundError:
+        recents = []
+
+    return recents
+
+
+def save_recents(recents: list, recents_file_name: str) -> None:
+    with open(recents_file_name, "w") as recents_file:
+        json.dump(recents, recents_file, indent=4)
 
 
 def main() -> None:
@@ -354,6 +449,7 @@ def main() -> None:
         generate_button=config["generate_button"],
         daydream_button=config["daydream_button"],
         reveal_qr_button=config["reveal_qr_button"],
+        reveal_prompt_button=config["reveal_prompt_button"],
         shutdown_hold_button=config["shutdown_hold_button"],
         shutdown_press_button=config["shutdown_press_button"],
     )
@@ -399,7 +495,6 @@ def main() -> None:
 
     logger.debug("Initializing transcriber...")
     transcriber = Transcriber(
-        temp_dir=config["transcribe_temp_dir"],
         channels=1,
         sample_width=2,
         framerate=input_sample_rate,
@@ -436,11 +531,17 @@ def main() -> None:
         vert_margin=vert_margin,
     )
 
+    logger.debug("Loading recent creations...")
+    recents = load_recents('recents.json')
+    recent_index = 0
+
     daydream = False
     manual_daydream_timestamps = []
 
     previous_user_prompt = ""
     user_prompt = ""
+
+    base_file_name = None
 
     show_status_screen(
         surface=disp_surface, text="Ready", status_screen_obj=status_screen
@@ -508,6 +609,27 @@ def main() -> None:
                         speech_svc=speech_svc,
                     )
                     logger.debug("Manual daydream request refused.")
+            elif status == "Prompt":
+                if base_file_name:
+                    prompt_surface = get_prompt_surface(
+                        prompt=user_prompt,
+                        prompt_source="User prompt" if not daydream else "A.R.T.I.S.T. Daydream",
+                        width = int(display_width * 0.75),
+                        height = int(display_height * 0.4),
+                        font_name=config["prompt_font"],
+                        font_size=config["prompt_font_size"],
+                    )
+
+                    x_pos = int((display_width - prompt_surface.get_width()) / 2)
+                    y_pos = int((display_height - prompt_surface.get_height()) / 2)
+
+                    disp_surface.blit(prompt_surface, (x_pos, y_pos))
+                    pygame.display.update()
+
+                    time.sleep(config["prompt_display_time"])
+
+                    disp_surface.blit(artist_canvas.surface, (0, 0))
+                    pygame.display.update()
             elif status == "QR":
                 # Quick way to make sure a creation has already been generated
                 if base_file_name:
@@ -539,6 +661,28 @@ def main() -> None:
 
                     # Don't break out of the loop after QR has been shown since no
                     # further action is required
+            elif status in ["Previous-Recent", "Next-Recent"]:
+                if recents:
+                    if status == "Previous-Recent":
+                        recent_index = (recent_index - 1) % len(recents)
+                    else:
+                        recent_index = (recent_index + 1) % len(recents)
+
+                    base_file_name = recents[recent_index]["base_name"]
+                    logger.debug(f"Recent creation selected: {base_file_name}")
+
+                    user_prompt = recents[recent_index]["prompt"]
+                    previous_user_prompt = user_prompt
+
+                    daydream = recents[recent_index]["daydream"]
+
+                    recent_img = pygame.image.load(
+                        os.path.join(output_dir, f"{base_file_name}.png")
+                    )
+
+                    artist_canvas.surface.blit(recent_img, (0, 0))
+                    disp_surface.blit(artist_canvas.surface, (0, 0))
+                    pygame.display.update()
 
         if not daydream:
             logger.info("=== Starting new creation ===")
@@ -763,6 +907,20 @@ def main() -> None:
                     except Exception as e:
                         logger.error("Error uploading screenshot to blob storage")
                         logger.exception(e)
+
+                logger.debug("Updating recent creations...")
+                recents.append({
+                    "base_name": base_file_name,
+                    "prompt": user_prompt,
+                    "daydream": daydream,
+                })
+
+                if len(recents) > config["max_recents"]:
+                    recents = recents[-config["max_recents"]:]
+
+                save_recents(recents, 'recents.json')
+
+                recent_index = len(recents) - 1
 
                 next_change_time = time.monotonic() + random.randint(
                     min_daydream_time, max_daydream_time

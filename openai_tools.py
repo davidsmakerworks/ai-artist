@@ -34,9 +34,8 @@ logger = logging.getLogger(get_logger_name())
 
 class Transcriber:
     def __init__(
-        self, temp_dir: str, channels: int, sample_width: int, framerate: int
+        self, channels: int, sample_width: int, framerate: int
     ) -> None:
-        self.temp_dir = temp_dir
         self.channels = channels
         self.sample_width = sample_width
         self.framerate = framerate

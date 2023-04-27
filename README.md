@@ -13,11 +13,9 @@ Uses Azure Blob Storage to store downloadable images.
 Requries paid OpenAI API key, Azure Cognitive Services Speech Service (free tier)
 and Azure Storage account
 
-TODO: Continue cleanup and refactor
+TODO: Major cleanup and refactor
 
-TODO: Allow paging back through previous creations
-
-TODO: Add option (key/button) to show prompt on screen after creation is rendered
+TODO: Improve error handling for any/all web requests
 
 TODO: Clean up QR code display code
 

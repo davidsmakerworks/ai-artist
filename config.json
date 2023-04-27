@@ -27,7 +27,7 @@
     "daydream_end_hour": 18,
     "manual_daydream_window": 60,
     "manual_daydream_limit": 6,
-    "max_recents": 4,
+    "max_recents": 10,
     "generate_button": 3,
     "daydream_button": 1,
     "reveal_qr_button": 0,

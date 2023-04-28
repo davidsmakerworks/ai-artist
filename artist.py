@@ -159,15 +159,7 @@ def speak_text(
     else:
         audio_data = speech_svc.text_to_speech(text)
 
-        wav_data = io.BytesIO()
-
-        with wave.open(wav_data, "wb") as f:
-            f.setnchannels(player.channels)
-            f.setsampwidth(player.sample_width)
-            f.setframerate(player.rate)
-            f.writeframes(audio_data)
-
-        wav_data.seek(0)
+        wav_data = io.BytesIO(audio_data)
 
         with wave.open(wav_data, "rb") as f:
             player.play(f.readframes(f.getnframes()))

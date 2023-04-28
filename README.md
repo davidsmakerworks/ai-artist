@@ -2,7 +2,7 @@
 A.R.T.I.S.T. - Audio-Responsive Transformative Imagination Synthesis Technology
 
 Generates images and verses of poetry based on user voice input. If no input is
-received for some time, autonomusly generates a new creation inspired by the
+received for some time, autonomously generates a new creation inspired by the
 previous scene.
 
 Uses OpenAI DALL-E 2 to generate images, GPT-3.5 Chat to generate verses

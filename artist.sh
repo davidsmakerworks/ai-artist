@@ -1,4 +1,5 @@
 #!/bin/bash
+
 exit_requested=0
 
 while [ $exit_requested -eq 0 ]

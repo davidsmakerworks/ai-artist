@@ -64,6 +64,7 @@ class ButtonConfig:
     A class to hold information about game controller button mappings in order to
     avoid passing a huge number of parameters to the check_for_event function.
     """
+
     def __init__(
         self,
         generate_button: int,
@@ -148,11 +149,9 @@ def speak_text(
             logger.debug(f"Cache miss - generating audio file: {filename}")
             audio_data = speech_svc.text_to_speech(text)
 
-            with wave.open(filename, "wb") as f:
-                f.setnchannels(player.channels)
-                f.setsampwidth(player.sample_width)
-                f.setframerate(player.rate)
-                f.writeframes(audio_data)
+            # Audio from Azure Speech API is already in WAV format including header
+            with open(filename, "wb") as f:
+                f.write(audio_data)
 
         with wave.open(filename, "rb") as f:
             logger.debug(f"Playing audio file: {filename}")
@@ -160,7 +159,18 @@ def speak_text(
     else:
         audio_data = speech_svc.text_to_speech(text)
 
-        player.play(audio_data)
+        wav_data = io.BytesIO()
+
+        with wave.open(wav_data, "wb") as f:
+            f.setnchannels(player.channels)
+            f.setsampwidth(player.sample_width)
+            f.setframerate(player.rate)
+            f.writeframes(audio_data)
+
+        wav_data.seek(0)
+
+        with wave.open(wav_data, "rb") as f:
+            player.play(f.readframes(f.getnframes()))
 
 
 def check_for_event(
@@ -613,8 +623,10 @@ def main() -> None:
                 # can be refactored for better error handling. A shell script should
                 # check for this file, and if it does not exist, restart the program.
                 with open("exit-requested.txt", "w") as f:
-                    f.write("This file is used to signal that the user has requested A.R.T.I.S.T. to shut down.\n")
-                
+                    f.write(
+                        "This file is used to signal that the user has requested A.R.T.I.S.T. to shut down.\n"
+                    )
+
                 pygame.quit()
                 return
             elif status == "New":
@@ -795,7 +807,6 @@ def main() -> None:
                     cache_dir=cache_dir,
                     player=audio_player,
                     speech_svc=speech_svc,
-                    use_cache=False,
                 )
 
             if previous_user_prompt:
@@ -870,6 +881,7 @@ def main() -> None:
                         cache_dir=cache_dir,
                         player=audio_player,
                         speech_svc=speech_svc,
+                        use_cache=False,
                     )
 
                 logger.debug("Saving image...")

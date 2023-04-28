@@ -30,8 +30,6 @@ from typing import Tuple
 class AudioPlayer:
     """
     Audio player class for playing audio streams.
-
-    TODO: Troubleshoot popping/clicking sounds at start of audio playback
     """
 
     def __init__(

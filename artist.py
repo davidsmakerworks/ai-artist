@@ -60,6 +60,10 @@ from typing import Union
 
 
 class ButtonConfig:
+    """
+    A class to hold information about game controller button mappings in order to
+    avoid passing a huge number of parameters to the check_for_event function.
+    """
     def __init__(
         self,
         generate_button: int,
@@ -300,20 +304,30 @@ def get_best_verse(
         return random.choice(verses)
 
 
-def get_prompt_surface(prompt: str, prompt_source: str, width: int, height: int, font_name: str, font_size: int) -> pygame.Surface:
+def get_prompt_surface(
+    prompt: str,
+    prompt_source: str,
+    width: int,
+    height: int,
+    font_name: str,
+    font_size: int,
+    margin_size: int = 10,
+) -> pygame.Surface:
     """
-    Get a surface with the prompt text rendered on it.
-
-    TODO: Major cleanup and remove magic numbers
+    Get a surface with the prompt text and prompt source rendered on it.
     """
     prompt_surface = pygame.Surface((width, height))
-    prompt_surface.fill(pygame.Color('yellow'))
+    prompt_surface.fill(pygame.Color("yellow"))
 
-    text_surface = pygame.Surface((width - 20, height - 20))
-    text_surface.fill(pygame.Color('black'))
+    text_surface = pygame.Surface(
+        (width - (margin_size * 2), height - (margin_size * 2))
+    )
+    text_surface.fill(pygame.Color("black"))
 
-    text_subsurface = pygame.Surface((width - 40, height - 40))
-    text_subsurface.fill(pygame.Color('black'))
+    text_subsurface = pygame.Surface(
+        (width - (margin_size * 4), height - (margin_size * 4))
+    )
+    text_subsurface.fill(pygame.Color("black"))
 
     prompt = "Prompt: " + prompt
     prompt_source = "Source: " + prompt_source
@@ -321,7 +335,7 @@ def get_prompt_surface(prompt: str, prompt_source: str, width: int, height: int,
     font = pygame.font.SysFont(font_name, font_size)
 
     prompt_words = prompt.split()
-    
+
     line = ""
     y_pos = 0
 
@@ -334,10 +348,10 @@ def get_prompt_surface(prompt: str, prompt_source: str, width: int, height: int,
         line_width = font.size(line)[0]
         line_height = font.size(line)[1]
 
-        if line_width > width - 80:
-            line_surface = font.render(previous_line, True, pygame.Color('white'))
+        if line_width > width - (margin_size * 8):
+            line_surface = font.render(previous_line, True, pygame.Color("white"))
             logger.debug(f"Rendering word-wrapped prompt line: {previous_line}")
-            text_subsurface.blit(line_surface, (10, y_pos))
+            text_subsurface.blit(line_surface, (margin_size, y_pos))
 
             line = word + " "
             y_pos += line_height
@@ -345,25 +359,29 @@ def get_prompt_surface(prompt: str, prompt_source: str, width: int, height: int,
 
     # Render any remaining words
     if line.strip():
-        line_surface = font.render(line, True, pygame.Color('white'))
+        line_surface = font.render(line, True, pygame.Color("white"))
         logger.debug(f"Rendering prompt line: {line}")
-        text_subsurface.blit(line_surface, (10, y_pos))
+        text_subsurface.blit(line_surface, (margin_size, y_pos))
         total_height += line_height
 
     # Leave blank line before prompt source
     y_pos += line_height * 2
     total_height += line_height
-    
-    line_surface = font.render(prompt_source, True, pygame.Color('white'))
+
+    line_surface = font.render(prompt_source, True, pygame.Color("white"))
     total_height += line_height
     logger.debug(f"Rendering prompt source line: {prompt_source}")
-    text_subsurface.blit(line_surface, (10, y_pos))
+    text_subsurface.blit(line_surface, (margin_size, y_pos))
 
-    text_surface.blit(text_subsurface, (10, (text_subsurface.get_height() - total_height) // 2))
+    text_surface.blit(
+        text_subsurface,
+        (margin_size, (text_subsurface.get_height() - total_height) // 2),
+    )
 
-    prompt_surface.blit(text_surface, (10, 10))
+    prompt_surface.blit(text_surface, (margin_size, margin_size))
 
     return prompt_surface
+
 
 def show_status_screen(
     surface: pygame.Surface, text: str, status_screen_obj: StatusScreen
@@ -425,6 +443,8 @@ def main() -> None:
     # where they are used.
     cache_dir = config["speech_cache_dir"]
     output_dir = config["output_dir"]
+
+    recents_file_name = config["recents_file_name"]
 
     storage_account = config["storage_account"]
     storage_container = config["storage_container"]
@@ -532,7 +552,7 @@ def main() -> None:
     )
 
     logger.debug("Loading recent creations...")
-    recents = load_recents('recents.json')
+    recents = load_recents(recents_file_name)
     recent_index = 0
 
     daydream = False
@@ -588,6 +608,13 @@ def main() -> None:
 
             if status == "Quit":
                 logger.info("*** A.R.T.I.S.T. is shutting down. ***")
+
+                # This is a workaround for crash-to-desktop issues until the code
+                # can be refactored for better error handling. A shell script should
+                # check for this file, and if it does not exist, restart the program.
+                with open("exit-requested.txt", "w") as f:
+                    f.write("This file is used to signal that the user has requested A.R.T.I.S.T. to shut down.\n")
+                
                 pygame.quit()
                 return
             elif status == "New":
@@ -613,9 +640,11 @@ def main() -> None:
                 if base_file_name:
                     prompt_surface = get_prompt_surface(
                         prompt=user_prompt,
-                        prompt_source="User prompt" if not daydream else "A.R.T.I.S.T. Daydream",
-                        width = int(display_width * 0.75),
-                        height = int(display_height * 0.4),
+                        prompt_source="User prompt"
+                        if not daydream
+                        else "A.R.T.I.S.T. Daydream",
+                        width=int(display_width * 0.75),
+                        height=int(display_height * 0.4),
                         font_name=config["prompt_font"],
                         font_size=config["prompt_font_size"],
                     )
@@ -669,7 +698,6 @@ def main() -> None:
                         recent_index = (recent_index + 1) % len(recents)
 
                     base_file_name = recents[recent_index]["base_name"]
-                    logger.debug(f"Recent creation selected: {base_file_name}")
 
                     user_prompt = recents[recent_index]["prompt"]
                     previous_user_prompt = user_prompt
@@ -775,6 +803,7 @@ def main() -> None:
             else:
                 daydream_prompt = " something completely random."
 
+            logger.debug(f"Daydreaming based on: {daydream_prompt}")
             user_prompt = ai_artist.get_chat_response(
                 message=config["artist_base_prompt"] + " " + daydream_prompt
             ).content
@@ -909,16 +938,18 @@ def main() -> None:
                         logger.exception(e)
 
                 logger.debug("Updating recent creations...")
-                recents.append({
-                    "base_name": base_file_name,
-                    "prompt": user_prompt,
-                    "daydream": daydream,
-                })
+                recents.append(
+                    {
+                        "base_name": base_file_name,
+                        "prompt": user_prompt,
+                        "daydream": daydream,
+                    }
+                )
 
                 if len(recents) > config["max_recents"]:
-                    recents = recents[-config["max_recents"]:]
+                    recents = recents[-config["max_recents"] :]
 
-                save_recents(recents, 'recents.json')
+                save_recents(recents, recents_file_name)
 
                 recent_index = len(recents) - 1
 

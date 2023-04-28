@@ -1,6 +1,7 @@
 {
     "speech_cache_dir": "cache",
     "output_dir": "output",
+    "recents_file_name": "recents.json",
     "file_name_length": 16,
     "speech_language": "en-US",
     "speech_gender": "Female",

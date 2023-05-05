@@ -24,6 +24,7 @@
     "critic_system_prompt": "You are a poetry critic who evaluates poems to determine which best fits the specified theme. You respond with only the number of the best poem and no other words.",
     "artist_system_prompt": "You are an imaginative artist who is inspired by various subjects. You imagine new scenes that are inspired by, but not very closely related to, the subject you are given. You respond with one sentence about that new scene. You use the present and progressive tenses, not the past tense.",
     "artist_base_prompt": "Write one sentence inspired by, but not very closely related to, ",
+    "use_critic": true,
     "num_verses": 3,
     "min_daydream_time": 10,
     "max_daydream_time": 60,

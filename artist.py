@@ -243,6 +243,28 @@ def check_moderation(msg: str) -> bool:
     return not flagged
 
 
+def get_one_verse(
+    poet: ChatCharacter,
+    base_prompt: str,
+    user_prompt: str,
+) -> str:
+    """
+    Get one verse from poet character.
+    """
+
+    # Poet is a single-turn character so no history is needed
+    poet.reset()
+
+    try:
+        verse = poet.get_chat_response(base_prompt + " " + user_prompt).content
+    except Exception as e:
+        logger.error(f"Error getting verse from poet")
+        logger.exception(e)
+        raise
+
+    return verse
+
+
 def get_best_verse(
     poet: ChatCharacter,
     critic: ChatCharacter,
@@ -255,23 +277,17 @@ def get_best_verse(
     to choose the best verse.
     """
 
-    # Poet and critic are both single-turn characters, so we reset them
-    # before generating the verses.
-    poet.reset()
-    critic.reset()
-
     verses: list[str] = []
 
     for _ in range(num_verses):
-        # Generate a verse
-        try:
-            verse = poet.get_chat_response(base_prompt + " " + user_prompt).content
-        except Exception as e:
-            logger.error(f"Error getting verse from poet")
-            logger.exception(e)
-            raise
+        verse = get_one_verse(
+            poet=poet, base_prompt=base_prompt, user_prompt=user_prompt
+        )
 
         verses.append(verse)
+
+    # Critic is a single-turn character so no history is needed
+    critic.reset()
 
     critic_message = f"Theme: {user_prompt}\n"
 
@@ -478,6 +494,10 @@ def main() -> None:
 
     num_verses = config["num_verses"]
 
+    # Critic is recommended for best results, but can be disabled to save tokens when
+    # using GPT-4 chat completion API
+    use_critic = config["use_critic"]
+
     min_daydream_time = config["min_daydream_time"] * 60  # Convert to seconds
     max_daydream_time = config["max_daydream_time"] * 60  # Convert to seconds
 
@@ -533,10 +553,12 @@ def main() -> None:
         system_prompt=config["poet_system_prompt"], model=config["poet_chat_model"]
     )
 
-    logger.debug("Initializing critic...")
-    critic = ChatCharacter(
-        system_prompt=config["critic_system_prompt"], model=config["critic_chat_model"]
-    )
+    if use_critic:
+        logger.debug("Initializing critic...")
+        critic = ChatCharacter(
+            system_prompt=config["critic_system_prompt"],
+            model=config["critic_chat_model"],
+        )
 
     logger.debug("Initializing artist canvas...")
     artist_canvas = ArtistCanvas(
@@ -847,14 +869,22 @@ def main() -> None:
             if not creation_failed:
                 img_bytes = base64.b64decode(response["data"][0]["b64_json"])
 
-                logger.debug("Getting best verse...")
-                verse = get_best_verse(
-                    poet=poet,
-                    critic=critic,
-                    base_prompt=config["verse_base_prompt"],
-                    user_prompt=user_prompt,
-                    num_verses=num_verses,
-                )
+                if use_critic:
+                    logger.debug("Getting best verse...")
+                    verse = get_best_verse(
+                        poet=poet,
+                        critic=critic,
+                        base_prompt=config["verse_base_prompt"],
+                        user_prompt=user_prompt,
+                        num_verses=num_verses,
+                    )
+                else:
+                    logger.debug("Getting one verse...")
+                    verse = get_one_verse(
+                        poet=poet,
+                        base_prompt=config["verse_base_prompt"],
+                        user_prompt=user_prompt,
+                    )
 
                 verse_lines = verse.split("\n")
 

@@ -520,16 +520,23 @@ def main() -> None:
         channels=1,
         sample_width=2,
         framerate=input_sample_rate,
+        model=config["transcriber_model"],
     )
 
     logger.debug("Initialzing autonomous AI artist...")
-    ai_artist = ChatCharacter(system_prompt=config["artist_system_prompt"])
+    ai_artist = ChatCharacter(
+        system_prompt=config["artist_system_prompt"], model=config["artist_chat_model"]
+    )
 
     logger.debug("Initializing poet...")
-    poet = ChatCharacter(system_prompt=config["poet_system_prompt"])
+    poet = ChatCharacter(
+        system_prompt=config["poet_system_prompt"], model=config["poet_chat_model"]
+    )
 
     logger.debug("Initializing critic...")
-    critic = ChatCharacter(system_prompt=config["critic_system_prompt"])
+    critic = ChatCharacter(
+        system_prompt=config["critic_system_prompt"], model=config["critic_chat_model"]
+    )
 
     logger.debug("Initializing artist canvas...")
     artist_canvas = ArtistCanvas(

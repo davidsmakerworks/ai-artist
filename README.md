@@ -27,3 +27,6 @@ TODO: Improve error handling for any/all web requests
 TODO: Improve HTML template, add CSS
 
 TODO: Add method to change microphone sensitivity/volume
+
+TODO: Make generation of multiple poems and use of poetry critic optional since
+the generated verse quality with GPT-4 should be much better than GPT-3.5-Turbo

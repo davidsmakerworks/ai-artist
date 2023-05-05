@@ -23,7 +23,6 @@
 
 import io
 import logging
-import os
 import wave
 
 import openai
@@ -34,11 +33,12 @@ logger = logging.getLogger(get_logger_name())
 
 class Transcriber:
     def __init__(
-        self, channels: int, sample_width: int, framerate: int
+        self, channels: int, sample_width: int, framerate: int, model: str
     ) -> None:
         self.channels = channels
         self.sample_width = sample_width
         self.framerate = framerate
+        self.model = model
 
     def transcribe(self, audio_stream: bytes) -> str:
         """
@@ -59,7 +59,7 @@ class Transcriber:
         audio_data.name = "audio.wav" # Name hint only, not a file on disk
 
         try:
-            response = openai.Audio.transcribe(model="whisper-1", file=audio_data)
+            response = openai.Audio.transcribe(model=self.model, file=audio_data)
         except Exception as e:
             logger.error(f"Transcriber response: {response}")
             logger.exception(e)
@@ -82,8 +82,9 @@ class ChatResponse:
 
 
 class ChatCharacter:
-    def __init__(self, system_prompt: str) -> None:
+    def __init__(self, system_prompt: str, model: str) -> None:
         self._system_prompt = system_prompt
+        self._model = model
         self.reset()
 
     def reset(self) -> None:
@@ -104,7 +105,7 @@ class ChatCharacter:
         self._messages.append({"role": "user", "content": message})
 
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo", messages=self._messages
+            model=self._model, messages=self._messages
         )
 
         self._messages.append(response["choices"][0]["message"])

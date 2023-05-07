@@ -20,9 +20,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import base64
+import logging
 
+import openai
 import pygame
 
+from log_config import get_logger_name
+
+logger = logging.getLogger(get_logger_name())
 
 class ArtistCreation:
     def __init__(
@@ -127,9 +133,7 @@ class ArtistCanvas:
             raise ValueError("img_side must be either 'left' or 'right'")
 
         # Draw the image
-        self._surface.blit(
-            source=creation.img, dest=(img_x, self._vert_margin)
-        )
+        self._surface.blit(source=creation.img, dest=(img_x, self._vert_margin))
 
         max_verse_width = (self._width - img_width) - (self._horiz_margin * 3)
         verse_font_size = self._get_verse_font_size(
@@ -201,3 +205,32 @@ class StatusScreen:
         y_pos = int(self._surface.get_height() / 2 - font.size(text)[1] / 2)
         text_surface = font.render(text, True, pygame.Color("white"))
         self._surface.blit(text_surface, (x_pos, y_pos))
+
+
+class ArtistPainter:
+    def __init__(
+        self, api_key: str, base_prompt: str, img_width: int, img_height: int
+    ) -> None:
+        self.api_key = api_key
+        self.base_prompt = base_prompt
+        self.img_width = img_width
+        self.img_height = img_height
+
+    def generate_image_data(self, prompt: str) -> bytes:
+        img_prompt = self.base_prompt + prompt
+        img_size = f"{self.img_width}x{self.img_height}"
+
+        try:
+            response = openai.Image.create(
+                api_key=self.api_key,
+                prompt=img_prompt,
+                size=img_size,
+                response_format="b64_json",
+                user="A.R.T.I.S.T.",
+            )
+        except Exception as e:
+            logger.error(f"Image creation response: {response}")
+            logger.exception(e)
+            raise
+
+        return base64.b64decode(response["data"][0]["b64_json"])

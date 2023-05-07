@@ -33,9 +33,7 @@ Uses Azure Speech API to convert text to speech.
 Uses Azure Blob Storage to store downloadable images.
 """
 
-import base64
 import datetime
-import hashlib
 import io
 import json
 import logging
@@ -43,15 +41,15 @@ import random
 import os
 import string
 import time
-import wave
 
 import pygame
 import qrcode
-import openai
 
-from artist_classes import ArtistCanvas, ArtistCreation, StatusScreen
-from audio_tools import AudioPlayer, AudioRecorder
-from azure_speech import AzureSpeech
+from artist_classes import ArtistCanvas, ArtistCreation, ArtistPainter, StatusScreen
+from artist_moderator import ArtistModerator
+from artist_speech import ArtistSpeech
+from artist_storage import ArtistStorage
+from audio_tools import AudioRecorder
 from azure.storage.blob import BlobServiceClient, ContentSettings
 from log_config import create_global_logger
 from openai_tools import ChatCharacter, Transcriber
@@ -122,49 +120,6 @@ def init_joystick() -> Union[pygame.joystick.JoystickType, None]:
         return None
 
 
-def speak_text(
-    text: str,
-    cache_dir: str,
-    player: AudioPlayer,
-    speech_svc: AzureSpeech,
-    use_cache: bool = True,
-) -> None:
-    """
-    Speak text using Azure Speech API.
-
-    Caches audio files to avoid unnecessary API calls, but allows for bypassing caching
-    when speaking lines that will be unique.
-    """
-    logger.info(f"Speaking: {text}")
-    text_details = speech_svc.language + speech_svc.gender + speech_svc.voice + text
-
-    text_details_hash = hashlib.sha256(text_details.encode("utf-8")).hexdigest()
-
-    logger.debug(f"Text details: {text_details} - Hash: {text_details_hash}")
-
-    if use_cache:
-        filename = os.path.join(cache_dir, f"{text_details_hash}.wav")
-
-        if not os.path.exists(filename):
-            logger.debug(f"Cache miss - generating audio file: {filename}")
-            audio_data = speech_svc.text_to_speech(text)
-
-            # Audio from Azure Speech API is already in WAV format including header
-            with open(filename, "wb") as f:
-                f.write(audio_data)
-
-        with wave.open(filename, "rb") as f:
-            logger.debug(f"Playing audio file: {filename}")
-            player.play(f.readframes(f.getnframes()))
-    else:
-        audio_data = speech_svc.text_to_speech(text)
-
-        wav_data = io.BytesIO(audio_data)
-
-        with wave.open(wav_data, "rb") as f:
-            player.play(f.readframes(f.getnframes()))
-
-
 def check_for_event(
     js: Union[pygame.joystick.JoystickType, None],
     button_config: ButtonConfig,
@@ -217,30 +172,6 @@ def get_random_string(length: int) -> str:
     """
     chars = string.ascii_lowercase + string.digits
     return "".join(random.choices(chars, k=length))
-
-
-def check_moderation(msg: str) -> bool:
-    """
-    Check if a message complies with content policy.
-
-    Returns True if message is safe, False if it is not.
-    """
-    try:
-        response = openai.Moderation.create(input=msg)
-    except Exception as e:
-        logger.error(f"Moderation response: {response}")
-        logger.exception(e)
-        raise
-
-    flagged = response["results"][0]["flagged"]
-
-    if flagged:
-        logger.info(f"Message flagged by moderation: {msg}")
-        logger.info(f"Moderation response: {response}")
-    else:
-        logger.info(f"Moderation check passed")
-
-    return not flagged
 
 
 def get_one_verse(
@@ -439,7 +370,7 @@ def save_recents(recents: list, recents_file_name: str) -> None:
 
 def main() -> None:
     try:
-        openai.api_key = os.environ["OPENAI_API_KEY"]
+        openai_api_key = os.environ["OPENAI_API_KEY"]
         azure_speech_region = os.environ["AZURE_SPEECH_REGION"]
         azure_speech_key = os.environ["AZURE_SPEECH_KEY"]
         azure_storage_key = os.environ["AZURE_STORAGE_KEY"]
@@ -459,7 +390,6 @@ def main() -> None:
     # In general, configuration items that are referenced multiple times are
     # initialized here. Items that are used only once are usually referenced directly
     # where they are used.
-    cache_dir = config["speech_cache_dir"]
     output_dir = config["output_dir"]
 
     recents_file_name = config["recents_file_name"]
@@ -512,25 +442,21 @@ def main() -> None:
     js = init_joystick()
 
     logger.debug("Initializing speech...")
-    speech_svc = AzureSpeech(
+    speech_svc = ArtistSpeech(
         subscription_key=azure_speech_key,
         region=azure_speech_region,
         language=config["speech_language"],
         gender=config["speech_gender"],
         voice=config["speech_voice"],
+        cache_dir=config["speech_cache_dir"],
     )
 
     logger.debug("Initializing storage...")
-    blob_service_client = BlobServiceClient(
-        account_url=f"https://{storage_account}.blob.core.windows.net",
-        credential=azure_storage_key,
+    storage = ArtistStorage(
+        storage_key=azure_storage_key,
+        storage_account=config["storage_account"],
+        storage_container=config["storage_container"],
     )
-    blob_container_client = blob_service_client.get_container_client(
-        container=storage_container
-    )
-
-    logger.debug("Initializing audio player...")
-    audio_player = AudioPlayer(sample_width=2, channels=1, rate=output_sample_rate)
 
     logger.debug("Initializing audio recorder...")
     audio_recorder = AudioRecorder(sample_width=2, channels=1, rate=input_sample_rate)
@@ -548,6 +474,14 @@ def main() -> None:
         system_prompt=config["artist_system_prompt"], model=config["artist_chat_model"]
     )
 
+    logger.debug("Initializing painter...")
+    painter = ArtistPainter(
+        api_key=openai_api_key,
+        base_prompt=config["painter_base_prompt"],
+        img_width=img_width,
+        img_height=img_height,
+    )
+
     logger.debug("Initializing poet...")
     poet = ChatCharacter(
         system_prompt=config["poet_system_prompt"], model=config["poet_chat_model"]
@@ -559,6 +493,9 @@ def main() -> None:
             system_prompt=config["critic_system_prompt"],
             model=config["critic_chat_model"],
         )
+
+    logger.debug("Initializing moderator...")
+    moderator = ArtistModerator(api_key=openai_api_key)
 
     logger.debug("Initializing artist canvas...")
     artist_canvas = ArtistCanvas(
@@ -662,11 +599,8 @@ def main() -> None:
                     daydream = True
                     break
                 else:
-                    speak_text(
-                        text=random.choice(config["daydream_refusal_lines"]),
-                        cache_dir=cache_dir,
-                        player=audio_player,
-                        speech_svc=speech_svc,
+                    speech_svc.speak_text(
+                        text=random.choice(config["daydream_refusal_lines"])
                     )
                     logger.debug("Manual daydream request refused.")
             elif status == "Prompt":
@@ -758,12 +692,7 @@ def main() -> None:
                 + random.choice(config["welcome_lines"])
             )
 
-            speak_text(
-                text=greeting_phrase,
-                cache_dir=cache_dir,
-                player=audio_player,
-                speech_svc=speech_svc,
-            )
+            speech_svc.speak_text(text=greeting_phrase)
 
             show_status_screen(
                 surface=disp_surface,
@@ -786,14 +715,8 @@ def main() -> None:
                         text="Working...",
                         status_screen_obj=status_screen,
                     )
-                    working_phrase = random.choice(config["working_lines"])
 
-                    speak_text(
-                        text=working_phrase,
-                        cache_dir=cache_dir,
-                        player=audio_player,
-                        speech_svc=speech_svc,
-                    )
+                    speech_svc.speak_text(text=random.choice(config["working_lines"]))
 
                     user_prompt = transcriber.transcribe(audio_stream=in_stream)
 
@@ -823,12 +746,7 @@ def main() -> None:
 
             # Only speak line if daydream is manually initiated
             if status == "Daydream":
-                speak_text(
-                    text=random.choice(config["daydream_lines"]),
-                    cache_dir=cache_dir,
-                    player=audio_player,
-                    speech_svc=speech_svc,
-                )
+                speech_svc.speak_text(text=random.choice(config["daydream_lines"]))
 
             if previous_user_prompt:
                 daydream_prompt = previous_user_prompt
@@ -849,26 +767,16 @@ def main() -> None:
         img_prompt = config["image_base_prompt"] + user_prompt
         previous_user_prompt = user_prompt
 
-        can_create = check_moderation(img_prompt)
+        can_create = moderator.check_msg(msg=img_prompt)
         creation_failed = False
-        response = None  # Clear out previous response
 
         if can_create:
             try:
-                response = openai.Image.create(
-                    prompt=img_prompt,
-                    size=img_size,
-                    response_format="b64_json",
-                    user="A.R.T.I.S.T.",
-                )
+                img_bytes = painter.generate_image_data(prompt=img_prompt)
             except Exception as e:
-                logger.error(f"Image creation response: {response}")
-                logger.exception(e)
                 creation_failed = True
 
             if not creation_failed:
-                img_bytes = base64.b64decode(response["data"][0]["b64_json"])
-
                 if use_critic:
                     logger.debug("Getting best verse...")
                     verse = get_best_verse(
@@ -896,22 +804,11 @@ def main() -> None:
                 finished_phrase = random.choice(config["finished_lines"])
 
                 if not daydream:
-                    speak_text(
-                        text=finished_phrase,
-                        cache_dir=cache_dir,
-                        player=audio_player,
-                        speech_svc=speech_svc,
-                    )
+                    speech_svc.speak_text(text=finished_phrase)
 
                 # Only speak prompt if daydream was manually initiated
                 elif status == "Daydream":
-                    speak_text(
-                        text=user_prompt,
-                        cache_dir=cache_dir,
-                        player=audio_player,
-                        speech_svc=speech_svc,
-                        use_cache=False,
-                    )
+                    speech_svc.speak_text(text=user_prompt, use_cache=False)
 
                 logger.debug("Saving image...")
                 raw_image_file_name = base_file_name + "-raw.png"
@@ -954,12 +851,10 @@ def main() -> None:
 
                 with open(os.path.join(output_dir, html_file_name), "rb") as f:
                     try:
-                        content_settings = ContentSettings(content_type="text/html")
-                        blob_container_client.upload_blob(
-                            name=base_file_name + ".html",
-                            data=f,
-                            overwrite=True,
-                            content_settings=content_settings,
+                        storage.upload_blob(
+                            blob_name=base_file_name + ".html",
+                            data=f.read(),
+                            content_type="text/html",
                         )
                     except Exception as e:
                         logger.error("Error uploading HTML to blob storage")
@@ -967,12 +862,10 @@ def main() -> None:
 
                 with open(os.path.join(output_dir, screenshot_file_name), "rb") as f:
                     try:
-                        content_settings = ContentSettings(content_type="image/png")
-                        blob_container_client.upload_blob(
-                            name=screenshot_file_name,
-                            data=f,
-                            overwrite=True,
-                            content_settings=content_settings,
+                        storage.upload_blob(
+                            blob_name=base_file_name + ".png",
+                            data=f.read(),
+                            content_type="image/png",
                         )
                     except Exception as e:
                         logger.error("Error uploading screenshot to blob storage")
@@ -1004,14 +897,8 @@ def main() -> None:
                 text="Creation failed!",
                 status_screen_obj=status_screen,
             )
-            failed_phrase = random.choice(config["failed_lines"])
 
-            speak_text(
-                text=failed_phrase,
-                cache_dir=cache_dir,
-                player=audio_player,
-                speech_svc=speech_svc,
-            )
+            speech_svc.speak_text(text=random.choice(config["failed_lines"]))
 
 
 if __name__ == "__main__":

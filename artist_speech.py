@@ -20,13 +20,23 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import hashlib
+import io
+import logging
+import os
+import wave
 
-import requests
-import time
+import azure.cognitiveservices.speech as speechsdk
+
 import xml.etree.ElementTree as ET
 
+from audio_tools import AudioPlayer
 
-class AzureSpeech:
+from log_config import get_logger_name
+
+logger = logging.getLogger(get_logger_name())
+
+class ArtistSpeech:
     def __init__(
         self,
         subscription_key: str,
@@ -34,63 +44,37 @@ class AzureSpeech:
         language: str,
         gender: str,
         voice: str,
-        output_format: str = "riff-16khz-16bit-mono-pcm",
-        user_agent: str = "DMW Azure Speech Tools 1.0",
+        cache_dir: str,
+        output_format: speechsdk.SpeechSynthesisOutputFormat = speechsdk.SpeechSynthesisOutputFormat.Riff16Khz16BitMonoPcm,
+        channels: int = 1,
+        sample_rate: int = 16000,
+        sample_width: int = 2,
     ) -> None:
-        self._subscription_key: str = subscription_key
-        self._region: str = region
+        self._cache_dir = cache_dir
 
-        self._fetch_token_url: str = (
-            f"https://{self._region}.api.cognitive.microsoft.com/sts/v1.0/issueToken"
+        self.language = language
+        self.gender = gender
+        self.voice = voice
+
+        self.style = None
+        self.pitch = None
+        self.rate = None
+        self.role = None
+
+        speech_config = speechsdk.SpeechConfig(
+            subscription=subscription_key, region=region
         )
-        self._tts_url: str = (
-            f"https://{self._region}.tts.speech.microsoft.com/cognitiveservices/v1"
+        speech_config.set_speech_synthesis_output_format(output_format)
+
+        self._synthesizer = speechsdk.SpeechSynthesizer(
+            speech_config=speech_config, audio_config=None
         )
 
-        self._access_token: str = ""
-        self._token_exp_time: float = time.monotonic()
+        self._player = AudioPlayer(
+            sample_width=sample_width, channels=channels, rate=sample_rate
+        )
 
-        self.output_format: str = output_format
-        self.language: str = language
-        self.gender: str = gender
-        self.voice: str = voice
-        self.user_agent = user_agent
-
-        self.style: str | None = None
-        self.pitch: str | None = None
-        self.rate: str | None = None
-        self.role: str | None = None
-
-    def _refresh_token(self) -> None:
-        if time.monotonic() >= self._token_exp_time:
-            headers = {"Ocp-Apim-Subscription-Key": self._subscription_key}
-
-            response = requests.post(self._fetch_token_url, headers=headers)
-
-            self._access_token = str(response.text)
-            self._token_exp_time = time.monotonic() + (
-                8 * 60
-            )  # Hard coded 8-minute expiration
-
-    def text_to_speech(self, text: str) -> bytes:
-        """
-        Converts text to speech using Azure Cognitive Services
-
-        Parameters:
-            text (str): Text to convert to speech
-
-        Returns:
-            bytes: Speech data in selected format
-        """
-        self._refresh_token()
-
-        headers = {
-            "Authorization": "Bearer " + self._access_token,
-            "Content-Type": "application/ssml+xml",
-            "X-Microsoft-OutputFormat": self.output_format,
-            "User-Agent": self.user_agent,
-        }
-
+    def _generate_ssml(self, text: str) -> str:
         speak_attrib = {
             "version": "1.0",
             "xmlns": "http://www.w3.org/2001/10/synthesis",
@@ -134,10 +118,30 @@ class AzureSpeech:
 
         ssml_parent.text = text
 
-        request_content = ET.tostring(ssml_root)
+        return ET.tostring(ssml_root, encoding="unicode")
 
-        response = requests.post(
-            url=self._tts_url, headers=headers, data=request_content
-        )
+    def speak_text(self, text: str, use_cache: bool = True) -> None:
+        if use_cache:
+            text_details = self.language + self.gender + self.voice + text
+            text_details_hash = hashlib.sha256(text_details.encode("utf-8")).hexdigest()
 
-        return response.content
+            cached_file_path = os.path.join(self._cache_dir, text_details_hash + ".wav")
+
+            if not os.path.exists(cached_file_path):
+                synthesis_result = self._synthesizer.speak_ssml(
+                    self._generate_ssml(text)
+                )
+
+                with open(cached_file_path, "wb") as cached_file:
+                    cached_file.write(synthesis_result.audio_data)
+
+            with wave.open(cached_file_path, "rb") as cached_file:
+                self._player.play(cached_file.readframes(cached_file.getnframes()))
+        else:
+            synthesis_result = self._synthesizer.speak_ssml(self._generate_ssml(text))
+            audio_data = synthesis_result.audio_data
+
+            wav_data = io.BytesIO(audio_data)
+
+            with wave.open(wav_data, "rb") as virtual_file:
+                self._player.play(virtual_file.readframes(virtual_file.getnframes()))

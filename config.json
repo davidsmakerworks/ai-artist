@@ -18,12 +18,23 @@
     "artist_chat_model": "gpt-4",
     "poet_chat_model": "gpt-3.5-turbo",
     "critic_chat_model": "gpt-3.5-turbo",
-    "image_base_prompt": "A detailed oil painting of ",
+    "image_base_prompts": [
+        "A detailed oil painting of ",
+        "A detailed watercolor of ",
+        "An intricately detailed abstract cubist painting of ",
+        "An detailed colorful pencil drawing of ",
+        "A detailed charcoal drawing of ",
+        "A detailed ink drawing of ",
+        "A detailed pastel drawing of ",
+        "A detailed crayon drawing of ",
+        "A detailed chalk drawing of ",
+        "A detailed marker drawing of "
+    ],
     "poet_system_prompt": "You are a poet who writes short light-hearted poems about various topics.",
-    "verse_base_prompt": "Write one verse about ",
-    "critic_system_prompt": "You are a poetry critic who evaluates poems to determine which best fits the specified theme. You respond with only the number of the best poem and no other words.",
-    "artist_system_prompt": "You are an imaginative artist who is inspired by various subjects. You imagine new scenes that are inspired by, but not very closely related to, the subject you are given. You respond with one sentence about that new scene. You use the present and progressive tenses, not the past tense.",
-    "artist_base_prompt": "Write one sentence inspired by, but not very closely related to, ",
+    "verse_base_prompt": "Write one short verse about ",
+    "critic_system_prompt": "You are a poetry critic who evaluates poems to determine which best fits the specified theme and has the best overall poetic quality. You respond with only the number of the best poem and no other words.",
+    "artist_system_prompt": "You are an imaginative artist who is inspired by various subjects. You imagine new scenes that are inspired by, but not very closely related to, the subject you are given. You respond with only one short sentence about that new scene. You use the present and progressive tenses, not the past tense. You primarily describe appearance and not actions.",
+    "artist_base_prompt": "Write one very short and concise sentence inspired by, but not very closely related to, ",
     "use_critic": true,
     "num_verses": 3,
     "min_daydream_time": 30,
@@ -78,7 +89,7 @@
     "working_lines": [
         "Okay, I'm working on it now!",
         "Okay, I'm creating that for you now!",
-        "Okay, I'm painting that for you now!",
+        "Okay, I'll have that ready for you soon!",
         "Okay, I'm making that for you now!"
     ],
     "finished_lines": [
@@ -89,7 +100,7 @@
     ],
     "failed_lines": [
         "I'm sorry, I couldn't create that for you.",
-        "I'm sorry, I couldn't paint that for you.",
+        "I'm sorry, I couldn't finish that for you.",
         "I'm sorry, I couldn't make that for you.",
         "I'm sorry, I can't create that for you."
     ],

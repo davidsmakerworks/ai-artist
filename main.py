@@ -25,7 +25,7 @@ A.R.T.I.S.T. - Audio-Responsive Transformative Imagination Synthesis Technology
 
 Generates images and verses of poetry based on user voice input.
 
-Uses OpenAI's DALL-E 2 to generate images, GPT-3.5 Chat to generate verses
+Uses OpenAI's DALL-E 2 to generate images, GPT Chat Completion to generate verses
 and Whisper API to transcribe speech.
 
 Uses Azure Speech API to convert text to speech.
@@ -764,7 +764,7 @@ def main() -> None:
 
         logger.info(f"Base name: {base_file_name}")
 
-        img_prompt = config["image_base_prompt"] + user_prompt
+        img_prompt = random.choice(config["image_base_prompts"]) + user_prompt
         previous_user_prompt = user_prompt
 
         can_create = moderator.check_msg(msg=img_prompt)

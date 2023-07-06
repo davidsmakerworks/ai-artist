@@ -5,7 +5,7 @@ Generates images and verses of poetry based on user voice input. If no input is
 received for some time, autonomously generates a new creation inspired by the
 previous scene.
 
-Uses OpenAI DALL-E 2 to generate images, GPT-3.5 Chat to generate verses
+Uses OpenAI DALL-E 2 to generate images, GPT Chat Completion to generate verses
 and Whisper API to transcribe speech to text.
 
 Uses Azure Speech API to convert text to speech.

@@ -477,7 +477,6 @@ def main() -> None:
     logger.debug("Initializing painter...")
     painter = ArtistPainter(
         api_key=openai_api_key,
-        base_prompt=config["painter_base_prompt"],
         img_width=img_width,
         img_height=img_height,
     )

@@ -209,21 +209,19 @@ class StatusScreen:
 
 class ArtistPainter:
     def __init__(
-        self, api_key: str, base_prompt: str, img_width: int, img_height: int
+        self, api_key: str, img_width: int, img_height: int
     ) -> None:
         self.api_key = api_key
-        self.base_prompt = base_prompt
         self.img_width = img_width
         self.img_height = img_height
 
     def generate_image_data(self, prompt: str) -> bytes:
-        img_prompt = self.base_prompt + prompt
         img_size = f"{self.img_width}x{self.img_height}"
 
         try:
             response = openai.Image.create(
                 api_key=self.api_key,
-                prompt=img_prompt,
+                prompt=prompt,
                 size=img_size,
                 response_format="b64_json",
                 user="A.R.T.I.S.T.",

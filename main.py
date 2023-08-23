@@ -25,8 +25,9 @@ A.R.T.I.S.T. - Audio-Responsive Transformative Imagination Synthesis Technology
 
 Generates images and verses of poetry based on user voice input.
 
-Uses OpenAI's DALL-E 2 to generate images, GPT Chat Completion to generate verses
-and Whisper API to transcribe speech.
+Uses OpenAI DALL-E 2 or Stability AI SDXL to generate images.
+
+Uses OpenAI GPT Chat Completion to generate verses and Whisper API to transcribe speech.
 
 Uses Azure Speech API to convert text to speech.
 
@@ -45,7 +46,13 @@ import time
 import pygame
 import qrcode
 
-from artist_classes import ArtistCanvas, ArtistCreation, ArtistPainter, StatusScreen
+from artist_classes import (
+    ArtistCanvas,
+    ArtistCreation,
+    SDXLCreator,
+    DallE2Creator,
+    StatusScreen,
+)
 from artist_moderator import ArtistModerator
 from artist_speech import ArtistSpeech
 from artist_storage import ArtistStorage
@@ -370,19 +377,33 @@ def save_recents(recents: list, recents_file_name: str) -> None:
 
 def main() -> None:
     try:
-        openai_api_key = os.environ["OPENAI_API_KEY"]
-        azure_speech_region = os.environ["AZURE_SPEECH_REGION"]
-        azure_speech_key = os.environ["AZURE_SPEECH_KEY"]
-        azure_storage_key = os.environ["AZURE_STORAGE_KEY"]
-    except KeyError:
-        print("Please set environment variables for OpenAI and Azure.")
-        return
-
-    try:
         with open("config.json", "r") as config_file:
             config = json.load(config_file)
     except FileNotFoundError:
         print("Please create a config.json file.")
+        return
+
+    image_model = config["image_model"]
+
+    try:
+        openai_api_key = os.environ["OPENAI_API_KEY"]
+    except KeyError:
+        print("Please set environment variable for OpenAI API key.")
+        return
+
+    if image_model == "sdxl":
+        try:
+            stability_ai_api_key = os.environ["SAI_API_KEY"]
+        except KeyError:
+            print("Please set environment variable for Stability AI API key.")
+            return
+
+    try:
+        azure_speech_region = os.environ["AZURE_SPEECH_REGION"]
+        azure_speech_key = os.environ["AZURE_SPEECH_KEY"]
+        azure_storage_key = os.environ["AZURE_STORAGE_KEY"]
+    except KeyError:
+        print("Please set environment variables for Azure API keys.")
         return
 
     logger.info("*** Starting A.R.T.I.S.T. ***")
@@ -398,14 +419,11 @@ def main() -> None:
     storage_container = config["storage_container"]
 
     input_sample_rate = config["input_sample_rate"]
-    output_sample_rate = config["output_sample_rate"]
 
     max_recording_time = config["max_recording_time"]
 
     img_width = config["img_width"]
     img_height = config["img_height"]
-
-    img_size = f"{img_width}x{img_height}"
 
     display_width = config["display_width"]
     display_height = config["display_height"]
@@ -474,12 +492,23 @@ def main() -> None:
         system_prompt=config["artist_system_prompt"], model=config["artist_chat_model"]
     )
 
-    logger.debug("Initializing painter...")
-    painter = ArtistPainter(
-        api_key=openai_api_key,
-        img_width=img_width,
-        img_height=img_height,
-    )
+    logger.debug(f"Initializing painter with image model {image_model}...")
+    if image_model == "sdxl":
+        painter = SDXLCreator(
+            api_key=stability_ai_api_key,
+            img_width=img_width,
+            img_height=img_height,
+        )
+    elif image_model == "dalle2":
+        painter = DallE2Creator(
+            api_key=openai_api_key,
+            img_width=img_width,
+            img_height=img_height,
+        )
+    else:
+        print(f"Unknown image model {image_model}")
+        logger.error(f"Unknown image model {image_model}")
+        return
 
     logger.debug("Initializing poet...")
     poet = ChatCharacter(

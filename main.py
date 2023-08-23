@@ -38,30 +38,30 @@ import datetime
 import io
 import json
 import logging
-import random
 import os
+import random
 import string
 import time
+from typing import Union
 
 import pygame
 import qrcode
+from azure.storage.blob import BlobServiceClient, ContentSettings
+from pygame.locals import *
 
 from artist_classes import (
     ArtistCanvas,
     ArtistCreation,
-    SDXLCreator,
     DallE2Creator,
+    SDXLCreator,
     StatusScreen,
 )
 from artist_moderator import ArtistModerator
 from artist_speech import ArtistSpeech
 from artist_storage import ArtistStorage
 from audio_tools import AudioRecorder
-from azure.storage.blob import BlobServiceClient, ContentSettings
 from log_config import create_global_logger
 from openai_tools import ChatCharacter, Transcriber
-from pygame.locals import *
-from typing import Union
 
 
 class ButtonConfig:

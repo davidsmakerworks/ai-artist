@@ -31,6 +31,7 @@ from log_config import get_logger_name
 
 logger = logging.getLogger(get_logger_name())
 
+
 class Transcriber:
     def __init__(
         self, channels: int, sample_width: int, framerate: int, model: str
@@ -54,9 +55,9 @@ class Transcriber:
         writer.writeframes(audio_stream)
 
         writer.close()
-        
+
         audio_data.seek(0)
-        audio_data.name = "audio.wav" # Name hint only, not a file on disk
+        audio_data.name = "audio.wav"  # Name hint only, not a file on disk
 
         try:
             response = openai.Audio.transcribe(model=self.model, file=audio_data)

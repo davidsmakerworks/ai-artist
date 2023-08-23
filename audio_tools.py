@@ -21,10 +21,9 @@
 # SOFTWARE.
 
 import array
+from typing import Tuple
 
 import pyaudio
-
-from typing import Tuple
 
 
 class AudioPlayer:
@@ -70,7 +69,9 @@ class AudioRecorder:
     Audio recorder class for recording audio streams.
     """
 
-    def __init__(self, sample_width: int = 2, channels: int = 2, rate: int = 44000) -> None:
+    def __init__(
+        self, sample_width: int = 2, channels: int = 2, rate: int = 44000
+    ) -> None:
         self._pyaudio = pyaudio.PyAudio()
 
         self.sample_width = sample_width
@@ -113,7 +114,10 @@ class AudioRecorder:
         """
 
         stream = self._pyaudio.open(
-            format=self._audio_format, channels=self.channels, rate=self.rate, input=True
+            format=self._audio_format,
+            channels=self.channels,
+            rate=self.rate,
+            input=True,
         )
 
         frames = []

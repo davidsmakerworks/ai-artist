@@ -2,6 +2,8 @@
 *.png
 *.txt
 
+!requirements.txt
+
 cache/
 output/
 

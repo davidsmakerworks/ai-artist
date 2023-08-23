@@ -1,0 +1,7 @@
+openai
+stability-sdk
+azure-cognitiveservices-speech
+azure-storage-blob
+pygame
+qrcode
+pyaudio

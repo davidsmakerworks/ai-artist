@@ -28,6 +28,7 @@ from log_config import get_logger_name
 
 logger = logging.getLogger(get_logger_name())
 
+
 class ArtistModerator:
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
@@ -54,4 +55,3 @@ class ArtistModerator:
             logger.info(f"Moderation check passed")
 
         return not flagged
-    

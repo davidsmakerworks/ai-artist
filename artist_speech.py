@@ -25,16 +25,15 @@ import io
 import logging
 import os
 import wave
+import xml.etree.ElementTree as ET
 
 import azure.cognitiveservices.speech as speechsdk
 
-import xml.etree.ElementTree as ET
-
 from audio_tools import AudioPlayer
-
 from log_config import get_logger_name
 
 logger = logging.getLogger(get_logger_name())
+
 
 class ArtistSpeech:
     def __init__(

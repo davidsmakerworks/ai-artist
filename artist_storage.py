@@ -43,7 +43,7 @@ class ArtistStorage:
 
     def upload_blob(self, blob_name: str, data: bytes, content_type: str) -> None:
         content_settings = ContentSettings(content_type=content_type)
-        
+
         self._blob_container_client.upload_blob(
             name=blob_name,
             data=data,

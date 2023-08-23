@@ -21,6 +21,10 @@ The code needs additional refactoring to make things like error handling more
 practical. For now, a brute-force approach of automatically restarting if there is 
 an unhandled exception has been employed.
 
+For Debian/Ubuntu, you may need to manually compile and install OpenSSL 1.1 because
+the Azure Cognitive Services Speech SDK does not yet support OpenSSL 3.0. Instructions
+for installation are [here](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/quickstarts/setup-platform?tabs=linux%2Cubuntu%2Cdotnetcli%2Cdotnet%2Cjre%2Cmaven%2Cnodejs%2Cmac%2Cpypi&pivots=programming-language-python).
+
 TODO: Cleanup and refactor
 
 TODO: Improve error handling for any/all web requests

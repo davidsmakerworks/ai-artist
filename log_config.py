@@ -21,9 +21,9 @@
 # SOFTWARE.
 
 import logging
-import os
 
 LOGGER_NAME = "ai-artist"
+
 
 def create_global_logger(log_file_path: str, log_level) -> logging.Logger:
     logger = logging.getLogger(LOGGER_NAME)
@@ -46,6 +46,7 @@ def create_global_logger(log_file_path: str, log_level) -> logging.Logger:
     logger.addHandler(console_handler)
 
     return logger
+
 
 def get_logger_name() -> str:
     return LOGGER_NAME

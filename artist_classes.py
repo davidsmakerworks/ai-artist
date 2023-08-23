@@ -25,13 +25,13 @@ import logging
 
 import openai
 import pygame
-
-from stability_sdk import client
 import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation
+from stability_sdk import client
 
 from log_config import get_logger_name
 
 logger = logging.getLogger(get_logger_name())
+
 
 class ArtistCreation:
     def __init__(
@@ -211,17 +211,15 @@ class StatusScreen:
 
 
 class SDXLCreator:
-    def __init__(
-        self, api_key: str, img_width: int, img_height: int
-    ) -> None:
+    def __init__(self, api_key: str, img_width: int, img_height: int) -> None:
         self.api_key = api_key
         self.img_width = img_width
         self.img_height = img_height
 
         self._stabiility_client = client.StabilityInference(
             key=self.api_key,
-            verbose=True, 
-            engine="stable-diffusion-xl-1024-v1-0", 
+            verbose=True,
+            engine="stable-diffusion-xl-1024-v1-0",
         )
 
     def generate_image_data(self, prompt: str) -> bytes:
@@ -238,9 +236,7 @@ class SDXLCreator:
 
 
 class DallE2Creator:
-    def __init__(
-        self, api_key: str, img_width: int, img_height: int
-    ) -> None:
+    def __init__(self, api_key: str, img_width: int, img_height: int) -> None:
         self.api_key = api_key
         self.img_width = img_width
         self.img_height = img_height
@@ -262,6 +258,3 @@ class DallE2Creator:
             raise
 
         return base64.b64decode(response["data"][0]["b64_json"])
-
-    
-

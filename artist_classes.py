@@ -34,6 +34,10 @@ logger = logging.getLogger(get_logger_name())
 
 
 class ArtistCreation:
+    """
+    Class representing a full "creation" by the A.R.T.I.S.T. system, i.e., the image
+    and its corresponding verse.
+    """
     def __init__(
         self,
         img: pygame.Surface,
@@ -48,6 +52,10 @@ class ArtistCreation:
 
 
 class ArtistCanvas:
+    """
+    Class representing the visible surface on which the ArtistCreation object
+    will be rendered.
+    """
     def __init__(
         self,
         width: int,
@@ -160,6 +168,10 @@ class ArtistCanvas:
 
 
 class StatusScreen:
+    """
+    Class representing the status screen displayed when A.R.T.I.S.T. is
+    waiting for input or generating a new creation.
+    """
     def __init__(
         self,
         width: int,

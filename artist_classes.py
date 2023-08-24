@@ -38,6 +38,7 @@ class ArtistCreation:
     Class representing a full "creation" by the A.R.T.I.S.T. system, i.e., the image
     and its corresponding verse.
     """
+
     def __init__(
         self,
         img: pygame.Surface,
@@ -56,6 +57,7 @@ class ArtistCanvas:
     Class representing the visible surface on which the ArtistCreation object
     will be rendered.
     """
+
     def __init__(
         self,
         width: int,
@@ -172,6 +174,7 @@ class StatusScreen:
     Class representing the status screen displayed when A.R.T.I.S.T. is
     waiting for input or generating a new creation.
     """
+
     def __init__(
         self,
         width: int,
@@ -223,14 +226,16 @@ class StatusScreen:
 
 
 class SDXLCreator:
-    def __init__(self, api_key: str, img_width: int, img_height: int) -> None:
+    def __init__(
+        self, api_key: str, img_width: int, img_height: int, steps: int
+    ) -> None:
         self.api_key = api_key
         self.img_width = img_width
         self.img_height = img_height
+        self.steps = steps
 
         self._stabiility_client = client.StabilityInference(
             key=self.api_key,
-            verbose=True,
             engine="stable-diffusion-xl-1024-v1-0",
         )
 
@@ -239,12 +244,17 @@ class SDXLCreator:
             prompt=prompt,
             width=self.img_width,
             height=self.img_height,
+            steps=self.steps,
         )
 
         for r in response:
             for artifact in r.artifacts:
-                if artifact.finish_reason != generation.FILTER:
+                if artifact.finish_reason == generation.FILTER:
+                    raise RuntimeError("Content filter triggered")
+                else:
                     return artifact.binary
+
+        raise RuntimeError("No artifact returned")
 
 
 class DallE2Creator:

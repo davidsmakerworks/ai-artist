@@ -42,6 +42,7 @@ import os
 import random
 import string
 import time
+from enum import Enum
 from typing import Union
 
 import pygame
@@ -62,6 +63,10 @@ from artist_storage import ArtistStorage
 from audio_tools import AudioRecorder
 from log_config import create_global_logger
 from openai_tools import ChatCharacter, Transcriber
+
+
+# Global logger object to avoid passing logger to many functions
+logger = create_global_logger("artist.log", logging.DEBUG)
 
 
 class ButtonConfig:
@@ -87,14 +92,26 @@ class ButtonConfig:
         self.shutdown_press_button = shutdown_press_button
 
 
-# Global logger object to avoid passing logger to many functions
-logger = create_global_logger("artist.log", logging.DEBUG)
+class UserAction(Enum):
+    """
+    An enumeration of user actions.
+    """
+
+    QUIT = 1
+    NEW = 2
+    DAYDREAM = 3
+    SHOW_PROMPT = 4
+    SHOW_QR = 5
+    PREVIOUS_RECENT = 6
+    NEXT_RECENT = 7
+    AUTO_DAYDREAM = 8
 
 
 def init_display(width: int, height: int) -> pygame.Surface:
     """
     Initialize pygame display.
     """
+
     pygame.init()
 
     pygame.mouse.set_visible(False)
@@ -117,6 +134,7 @@ def init_joystick() -> Union[pygame.joystick.JoystickType, None]:
     The returned joystick object must remain in scope for button press events
     to be detected.
     """
+
     pygame.joystick.init()
 
     if pygame.joystick.get_count() > 0:
@@ -130,43 +148,43 @@ def init_joystick() -> Union[pygame.joystick.JoystickType, None]:
 def check_for_event(
     js: Union[pygame.joystick.JoystickType, None],
     button_config: ButtonConfig,
-) -> Union[str, None]:
+) -> Union[UserAction, None]:
     """
     Check for events and return a string representing the event if one is found.
     """
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN:
             if event.key == K_ESCAPE:
-                return "Quit"
+                return UserAction.QUIT
             if event.key == K_SPACE:
-                return "New"
+                return UserAction.NEW
             if event.key == K_d:
-                return "Daydream"
+                return UserAction.DAYDREAM
             if event.key == K_p:
-                return "Prompt"
+                return UserAction.SHOW_PROMPT
             if event.key == K_q:
-                return "QR"
+                return UserAction.SHOW_QR
             if event.key == K_RIGHT:
-                return "Next-Recent"
+                return UserAction.NEXT_RECENT
             if event.key == K_LEFT:
-                return "Previous-Recent"
+                return UserAction.PREVIOUS_RECENT
         elif js and event.type == pygame.JOYBUTTONDOWN:
             if event.button == button_config.shutdown_press_button:
                 if js.get_button(button_config.shutdown_hold_button):
-                    return "Quit"
+                    return UserAction.QUIT
             if event.button == button_config.generate_button:
-                return "New"
+                return UserAction.NEW
             if event.button == button_config.daydream_button:
-                return "Daydream"
+                return UserAction.DAYDREAM
             if event.button == button_config.reveal_prompt_button:
-                return "Prompt"
+                return UserAction.SHOW_PROMPT
             if event.button == button_config.reveal_qr_button:
-                return "QR"
+                return UserAction.SHOW_QR
         elif js and event.type == pygame.JOYAXISMOTION:
             if event.axis == 0 and event.value < -0.5:
-                return "Previous-Recent"
+                return UserAction.PREVIOUS_RECENT
             if event.axis == 0 and event.value > 0.5:
-                return "Next-Recent"
+                return UserAction.NEXT_RECENT
 
     return None
 
@@ -498,6 +516,7 @@ def main() -> None:
             api_key=stability_ai_api_key,
             img_width=img_width,
             img_height=img_height,
+            steps=config["sdxl_steps"],
         )
     elif image_model == "dalle2":
         painter = DallE2Creator(
@@ -585,7 +604,7 @@ def main() -> None:
                     )
                     manual_daydream_timestamps = manual_daydream_timestamps[1:]
 
-            status = check_for_event(
+            user_action = check_for_event(
                 js=js,
                 button_config=button_config,
             )
@@ -598,11 +617,11 @@ def main() -> None:
                 and time_now.isoweekday() in config["daydream_iso_weekdays"]
                 and time.monotonic() >= next_change_time
             ):
-                status = "Auto-Daydream"
+                user_action = UserAction.AUTO_DAYDREAM
                 daydream = True
                 break
 
-            if status == "Quit":
+            if user_action == UserAction.QUIT:
                 logger.info("*** A.R.T.I.S.T. is shutting down. ***")
 
                 # This is a workaround for crash-to-desktop issues until the code
@@ -615,10 +634,10 @@ def main() -> None:
 
                 pygame.quit()
                 return
-            elif status == "New":
+            elif user_action == UserAction.NEW:
                 daydream = False
                 break
-            elif status == "Daydream":
+            elif user_action == UserAction.DAYDREAM:
                 if len(manual_daydream_timestamps) < config["manual_daydream_limit"]:
                     daydream_timestamp = time.monotonic()
 
@@ -631,7 +650,7 @@ def main() -> None:
                         text=random.choice(config["daydream_refusal_lines"])
                     )
                     logger.debug("Manual daydream request refused.")
-            elif status == "Prompt":
+            elif user_action == UserAction.SHOW_PROMPT:
                 if base_file_name:
                     prompt_surface = get_prompt_surface(
                         prompt=user_prompt,
@@ -654,7 +673,7 @@ def main() -> None:
 
                     disp_surface.blit(artist_canvas.surface, (0, 0))
                     pygame.display.update()
-            elif status == "QR":
+            elif user_action == UserAction.SHOW_QR:
                 # Quick way to make sure a creation has already been generated
                 if base_file_name:
                     img_url = f"https://{storage_account}.blob.core.windows.net/{storage_container}/{base_file_name}.html"
@@ -685,9 +704,9 @@ def main() -> None:
 
                     # Don't break out of the loop after QR has been shown since no
                     # further action is required
-            elif status in ["Previous-Recent", "Next-Recent"]:
+            elif user_action in [UserAction.PREVIOUS_RECENT, UserAction.NEXT_RECENT]:
                 if recents:
-                    if status == "Previous-Recent":
+                    if user_action == UserAction.PREVIOUS_RECENT:
                         recent_index = (recent_index - 1) % len(recents)
                     else:
                         recent_index = (recent_index + 1) % len(recents)
@@ -773,7 +792,7 @@ def main() -> None:
             )
 
             # Only speak line if daydream is manually initiated
-            if status == "Daydream":
+            if user_action == UserAction.DAYDREAM:
                 speech_svc.speak_text(text=random.choice(config["daydream_lines"]))
 
             if previous_user_prompt:
@@ -835,7 +854,7 @@ def main() -> None:
                     speech_svc.speak_text(text=finished_phrase)
 
                 # Only speak prompt if daydream was manually initiated
-                elif status == "Daydream":
+                elif user_action == UserAction.DAYDREAM:
                     speech_svc.speak_text(text=user_prompt, use_cache=False)
 
                 logger.debug("Saving image...")

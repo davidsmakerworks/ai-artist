@@ -227,24 +227,31 @@ class StatusScreen:
 
 class SDXLCreator:
     def __init__(
-        self, api_key: str, img_width: int, img_height: int, steps: int
+        self,
+        api_key: str,
+        img_width: int,
+        img_height: int,
+        steps: int,
+        cfg_scale: float,
     ) -> None:
         self.api_key = api_key
         self.img_width = img_width
         self.img_height = img_height
         self.steps = steps
+        self.cfg_scale = cfg_scale
 
-        self._stabiility_client = client.StabilityInference(
+        self._stability_client = client.StabilityInference(
             key=self.api_key,
             engine="stable-diffusion-xl-1024-v1-0",
         )
 
     def generate_image_data(self, prompt: str) -> bytes:
-        response = self._stabiility_client.generate(
+        response = self._stability_client.generate(
             prompt=prompt,
             width=self.img_width,
             height=self.img_height,
             steps=self.steps,
+            cfg_scale=self.cfg_scale,
         )
 
         for r in response:

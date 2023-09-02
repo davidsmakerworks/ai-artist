@@ -17,6 +17,7 @@
     "prompt_display_time": 10,
     "image_model": "sdxl",
     "sdxl_steps": 30,
+    "sdxl_cfg_scale": 7.0,
     "artist_chat_model": "gpt-4",
     "poet_chat_model": "gpt-3.5-turbo",
     "critic_chat_model": "gpt-3.5-turbo",

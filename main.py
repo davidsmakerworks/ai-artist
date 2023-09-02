@@ -517,6 +517,7 @@ def main() -> None:
             img_width=img_width,
             img_height=img_height,
             steps=config["sdxl_steps"],
+            cfg_scale=config["sdxl_cfg_scale"],
         )
     elif image_model == "dalle2":
         painter = DallE2Creator(

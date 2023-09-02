@@ -31,6 +31,4 @@ TODO: Improve error handling for any/all web requests
 
 TODO: Add method to change microphone sensitivity/volume
 
-TODO: Make SDXL options configurable
-
-TODO: Improve SDXL filter handling
+TODO: Handle slow uploads to Azure Blob Storage

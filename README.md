@@ -29,8 +29,6 @@ TODO: Cleanup and refactor
 
 TODO: Improve error handling for any/all web requests
 
-TODO: Improve HTML template, add CSS
-
 TODO: Add method to change microphone sensitivity/volume
 
 TODO: Make SDXL options configurable

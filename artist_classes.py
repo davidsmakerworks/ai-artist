@@ -250,6 +250,7 @@ class SDXLCreator:
         for r in response:
             for artifact in r.artifacts:
                 if artifact.finish_reason == generation.FILTER:
+                    logger.error("Content filter triggered")
                     raise RuntimeError("Content filter triggered")
                 else:
                     return artifact.binary

@@ -25,7 +25,7 @@ A.R.T.I.S.T. - Audio-Responsive Transformative Imagination Synthesis Technology
 
 Generates images and verses of poetry based on user voice input.
 
-Uses OpenAI DALL-E 2 or Stability AI SDXL to generate images.
+Uses OpenAI DALL-E 2/DALL-E 3 or Stability AI SDXL to generate images.
 
 Uses OpenAI GPT Chat Completion to generate verses and Whisper API to transcribe speech.
 
@@ -54,6 +54,7 @@ from artist_classes import (
     ArtistCanvas,
     ArtistCreation,
     DallE2Creator,
+    DallE3Creator,
     SDXLCreator,
     StatusScreen,
 )
@@ -503,11 +504,14 @@ def main() -> None:
         sample_width=2,
         framerate=input_sample_rate,
         model=config["transcriber_model"],
+        api_key=openai_api_key,
     )
 
     logger.debug("Initialzing autonomous AI artist...")
     ai_artist = ChatCharacter(
-        system_prompt=config["artist_system_prompt"], model=config["artist_chat_model"]
+        system_prompt=config["artist_system_prompt"],
+        model=config["artist_chat_model"],
+        api_key=openai_api_key,
     )
 
     logger.debug(f"Initializing painter with image model {image_model}...")
@@ -525,6 +529,13 @@ def main() -> None:
             img_width=img_width,
             img_height=img_height,
         )
+    elif image_model == "dalle3":
+        painter = DallE3Creator(
+            api_key=openai_api_key,
+            img_width=img_width,
+            img_height=img_height,
+            quality=config["dalle3_quality"],
+        )
     else:
         print(f"Unknown image model {image_model}")
         logger.error(f"Unknown image model {image_model}")
@@ -532,7 +543,12 @@ def main() -> None:
 
     logger.debug("Initializing poet...")
     poet = ChatCharacter(
-        system_prompt=config["poet_system_prompt"], model=config["poet_chat_model"]
+        system_prompt=config["poet_system_prompt"],
+        model=config["poet_chat_model"],
+        api_key=openai_api_key,
+        temperature=config["poet_temperature"],
+        presence_penalty=config["poet_presence_penalty"],
+        frequency_penalty=config["poet_frequency_penalty"],
     )
 
     if use_critic:
@@ -540,6 +556,7 @@ def main() -> None:
         critic = ChatCharacter(
             system_prompt=config["critic_system_prompt"],
             model=config["critic_chat_model"],
+            api_key=openai_api_key,
         )
 
     logger.debug("Initializing moderator...")

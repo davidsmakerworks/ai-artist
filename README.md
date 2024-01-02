@@ -32,3 +32,5 @@ TODO: Improve error handling for any/all web requests
 TODO: Add method to change microphone sensitivity/volume
 
 TODO: Handle slow uploads to Azure Blob Storage
+
+TODO: Improve handling of new OpenAI API response format

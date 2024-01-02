@@ -22,7 +22,7 @@
 
 import logging
 
-import openai
+from openai import OpenAI
 
 from log_config import get_logger_name
 
@@ -31,7 +31,8 @@ logger = logging.getLogger(get_logger_name())
 
 class ArtistModerator:
     def __init__(self, api_key: str) -> None:
-        self.api_key = api_key
+        self._openai_client = OpenAI()
+        self._openai_client.api_key = api_key
 
     def check_msg(self, msg: str) -> bool:
         """
@@ -40,13 +41,13 @@ class ArtistModerator:
         Returns True if message is safe, False if it is not.
         """
         try:
-            response = openai.Moderation.create(api_key=self.api_key, input=msg)
+            response = self._openai_client.moderations.create( input=msg)
         except Exception as e:
             logger.error(f"Moderation response: {response}")
             logger.exception(e)
             raise
 
-        flagged = response["results"][0]["flagged"]
+        flagged = response.results[0].flagged
 
         if flagged:
             logger.info(f"Message flagged by moderation: {msg}")

@@ -25,7 +25,7 @@ import io
 import logging
 import wave
 
-import openai
+from openai import OpenAI
 
 from log_config import get_logger_name
 
@@ -34,12 +34,15 @@ logger = logging.getLogger(get_logger_name())
 
 class Transcriber:
     def __init__(
-        self, channels: int, sample_width: int, framerate: int, model: str
+        self, channels: int, sample_width: int, framerate: int, model: str, api_key: str
     ) -> None:
         self.channels = channels
         self.sample_width = sample_width
         self.framerate = framerate
         self.model = model
+
+        self._openai_client = OpenAI()
+        self._openai_client.api_key = api_key
 
     def transcribe(self, audio_stream: bytes) -> str:
         """
@@ -60,32 +63,49 @@ class Transcriber:
         audio_data.name = "audio.wav"  # Name hint only, not a file on disk
 
         try:
-            response = openai.Audio.transcribe(model=self.model, file=audio_data)
+            response = self._openai_client.audio.transcriptions.create(
+                model=self.model, file=audio_data
+            )
         except Exception as e:
             logger.error(f"Transcriber response: {response}")
             logger.exception(e)
             raise
 
-        return response["text"]
+        return response.text
 
 
 class ChatResponse:
-    def __init__(self, response: dict) -> None:
+    def __init__(self, response) -> None:
         self._response = response
 
     @property
     def content(self) -> str:
-        return self._response["choices"][0]["message"]["content"]
+        return self._response.choices[0].message.content
 
     @property
     def total_tokens_used(self) -> int:
-        return self._response["usage"]["total_tokens"]
+        return self._response.usage.total_tokens
 
 
 class ChatCharacter:
-    def __init__(self, system_prompt: str, model: str) -> None:
+    def __init__(
+        self,
+        system_prompt: str,
+        model: str,
+        api_key: str,
+        temperature: float = 0.8,
+        presence_penalty: float = 0.0,
+        frequency_penalty: float = 0.0,
+    ) -> None:
         self._system_prompt = system_prompt
         self._model = model
+        self._temperature = temperature
+        self._presence_penalty = presence_penalty
+        self._frequency_penalty = frequency_penalty
+
+        self._openai_client = OpenAI()
+        self._openai_client.api_key = api_key
+
         self.reset()
 
     def reset(self) -> None:
@@ -105,10 +125,14 @@ class ChatCharacter:
     def get_chat_response(self, message: str) -> ChatResponse:
         self._messages.append({"role": "user", "content": message})
 
-        response = openai.ChatCompletion.create(
-            model=self._model, messages=self._messages
+        response = self._openai_client.chat.completions.create(
+            model=self._model,
+            messages=self._messages,
+            temperature=self._temperature,
+            presence_penalty=self._presence_penalty,
+            frequency_penalty=self._frequency_penalty,
         )
 
-        self._messages.append(response["choices"][0]["message"])
+        self._messages.append(response.choices[0].message)
 
         return ChatResponse(response)

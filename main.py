@@ -380,6 +380,10 @@ def update_display(
 
 
 def load_recents(recents_file_name: str) -> list:
+    """
+    Load recent creations from JSON file if the file exists,
+    otherwise return an empty list.
+    """
     try:
         with open(recents_file_name, "r") as recents_file:
             recents = json.load(recents_file)
@@ -407,14 +411,16 @@ def main() -> None:
     try:
         openai_api_key = os.environ["OPENAI_API_KEY"]
     except KeyError:
-        print("Please set environment variable for OpenAI API key.")
+        print("Please set OPENAI_API_KEY environment variable for OpenAI API key.")
         return
 
     if image_model == "sdxl":
         try:
             stability_ai_api_key = os.environ["SAI_API_KEY"]
         except KeyError:
-            print("Please set environment variable for Stability AI API key.")
+            print(
+                "Please set SAI_API_KEY environment variable for Stability AI API key."
+            )
             return
 
     try:
@@ -422,7 +428,9 @@ def main() -> None:
         azure_speech_key = os.environ["AZURE_SPEECH_KEY"]
         azure_storage_key = os.environ["AZURE_STORAGE_KEY"]
     except KeyError:
-        print("Please set environment variables for Azure API keys.")
+        print(
+            "Please set environment variables for Azure API keys: AZURE_SPEECH_REGION, AZURE_SPEECH_KEY, AZURE_STORAGE_KEY."
+        )
         return
 
     logger.info("*** Starting A.R.T.I.S.T. ***")
@@ -672,9 +680,9 @@ def main() -> None:
                 if base_file_name:
                     prompt_surface = get_prompt_surface(
                         prompt=user_prompt,
-                        prompt_source="User prompt"
-                        if not daydream
-                        else "A.R.T.I.S.T. Daydream",
+                        prompt_source=(
+                            "User prompt" if not daydream else "A.R.T.I.S.T. Daydream"
+                        ),
                         width=int(display_width * 0.75),
                         height=int(display_height * 0.4),
                         font_name=config["prompt_font"],
@@ -875,13 +883,9 @@ def main() -> None:
                 elif user_action == UserAction.DAYDREAM:
                     speech_svc.speak_text(text=user_prompt, use_cache=False)
 
-                logger.debug("Saving image...")
-                raw_image_file_name = base_file_name + "-raw.png"
-
-                with open(os.path.join(output_dir, raw_image_file_name), "wb") as f:
-                    f.write(img_bytes)
-
-                img = pygame.image.load(os.path.join(output_dir, raw_image_file_name))
+                # raw_image.png is a name hint to assist in file format detection, not
+                # an actual file on disk
+                img = pygame.image.load(io.BytesIO(img_bytes), "raw_image.png")
 
                 creation = ArtistCreation(img, verse_lines, user_prompt, daydream)
                 artist_canvas.render_creation(creation, img_side)
@@ -897,33 +901,31 @@ def main() -> None:
                 logger.debug("Uploading creation...")
                 image_url = f"https://{storage_account}.blob.core.windows.net/{storage_container}/{screenshot_file_name}"
 
-                html_file_name = base_file_name + ".html"
+                html_bytes = io.BytesIO()
 
                 with open(config["html_template"], "r") as template_file:
-                    with open(
-                        os.path.join(output_dir, html_file_name), "w"
-                    ) as output_html_file:
-                        for line in template_file:
-                            out_line = line.replace("***IMG-URL***", image_url)
-                            out_line = out_line.replace("***PROMPT***", user_prompt)
-                            out_line = out_line.replace(
-                                "***GEN-BY***",
-                                "A.R.T.I.S.T. Daydream" if daydream else "User Request",
-                            )
-                            out_line = out_line.replace("***TIME***", time.asctime())
-
-                            output_html_file.write(out_line)
-
-                with open(os.path.join(output_dir, html_file_name), "rb") as f:
-                    try:
-                        storage.upload_blob(
-                            blob_name=base_file_name + ".html",
-                            data=f.read(),
-                            content_type="text/html",
+                    for line in template_file:
+                        out_line = line.replace("***IMG-URL***", image_url)
+                        out_line = out_line.replace("***PROMPT***", user_prompt)
+                        out_line = out_line.replace(
+                            "***GEN-BY***",
+                            "A.R.T.I.S.T. Daydream" if daydream else "User Request",
                         )
-                    except Exception as e:
-                        logger.error("Error uploading HTML to blob storage")
-                        logger.exception(e)
+                        out_line = out_line.replace("***TIME***", time.asctime())
+
+                        html_bytes.write(out_line.encode())
+
+                html_bytes.seek(0)
+
+                try:
+                    storage.upload_blob(
+                        blob_name=base_file_name + ".html",
+                        data=html_bytes.read(),
+                        content_type="text/html",
+                    )
+                except Exception as e:
+                    logger.error("Error uploading HTML to blob storage")
+                    logger.exception(e)
 
                 with open(os.path.join(output_dir, screenshot_file_name), "rb") as f:
                     try:

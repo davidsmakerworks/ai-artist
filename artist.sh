@@ -4,7 +4,7 @@ exit_requested=0
 
 while [ $exit_requested -eq 0 ]
 do
-    python3 main.py
+    venv/bin/python main.py
 
     if test -f "exit-requested.txt"; then
         exit_requested=1

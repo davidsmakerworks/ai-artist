@@ -5,3 +5,4 @@ azure-storage-blob
 pygame
 qrcode
 pyaudio
+requests

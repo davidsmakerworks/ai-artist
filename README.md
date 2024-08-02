@@ -5,7 +5,7 @@ received for some time, autonomously generates a new creation inspired by the
 previous scene.
 
 ## Technologies used
-- OpenAI DALL-E 2, OpenAI DALL-E 3, or Stability AI SDXL to generate images
+- OpenAI DALL-E 2, OpenAI DALL-E 3, Stability AI SDXL or Stability AI Stable Image Ultra to generate images
 - OpenAI GPT Chat Completion to generate verses and Whisper API to
 transcribe speech to text
 - Azure Speech API to convert text to speech
@@ -15,7 +15,7 @@ transcribe speech to text
 - Paid OpenAI API key
 - Azure Cognitive Services Speech Service (free tier)
 - Azure Storage account
-- Paid Stability AI API key if using SDXL
+- Paid Stability AI API key if using SDXL or Stable Image
 
 The code needs additional refactoring to make things like error handling more
 practical. For now, a brute-force approach of automatically restarting if there is 
@@ -35,3 +35,4 @@ A Python vritual environment (venv) should be created to avoid conflicts with sy
 - Improve handling of new OpenAI API response format
 - Allow authenticated web access to recent creations
 - Track recent daydream topics to avoid getting stuck on particular subjects (jellyfish, mermaids, etc.)
+- Add support for Stable Image Core and Stable Diffusion 3 models

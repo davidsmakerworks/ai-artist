@@ -56,6 +56,7 @@ from artist_classes import (
     DallE2Creator,
     DallE3Creator,
     SDXLCreator,
+    StableImageCreator,
     StatusScreen,
 )
 from artist_moderator import ArtistModerator
@@ -408,13 +409,16 @@ def main() -> None:
 
     image_model = config["image_model"]
 
+    if image_model == "stableimage":
+        stable_image_model = config["stableimage_model"]
+
     try:
         openai_api_key = os.environ["OPENAI_API_KEY"]
     except KeyError:
         print("Please set OPENAI_API_KEY environment variable for OpenAI API key.")
         return
 
-    if image_model == "sdxl":
+    if image_model == "sdxl" or image_model == "stableimage":
         try:
             stability_ai_api_key = os.environ["SAI_API_KEY"]
         except KeyError:
@@ -543,6 +547,11 @@ def main() -> None:
             img_width=img_width,
             img_height=img_height,
             quality=config["dalle3_quality"],
+        )
+    elif image_model == "stableimage":
+        painter = StableImageCreator(
+            api_key=stability_ai_api_key,
+            model=stable_image_model,
         )
     else:
         print(f"Unknown image model {image_model}")

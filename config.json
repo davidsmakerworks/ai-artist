@@ -19,9 +19,9 @@
     "sdxl_steps": 30,
     "sdxl_cfg_scale": 7.0,
     "dalle3_quality": "standard",
-    "artist_chat_model": "gpt-4",
-    "poet_chat_model": "gpt-3.5-turbo",
-    "critic_chat_model": "gpt-3.5-turbo",
+    "artist_chat_model": "gpt-4o",
+    "poet_chat_model": "gpt-4o-mini",
+    "critic_chat_model": "gpt-4o-mini",
     "image_base_prompts": [
         "A detailed oil painting of ",
         "A detailed watercolor of ",

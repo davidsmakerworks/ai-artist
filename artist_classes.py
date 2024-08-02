@@ -259,10 +259,10 @@ class SDXLCreator:
                 if artifact.finish_reason == generation.FILTER:
                     logger.error("Content filter triggered")
                     raise RuntimeError("Content filter triggered")
-                else:
+                elif artifact.type == generation.ARTIFACT_IMAGE:
                     return artifact.binary
 
-        raise RuntimeError("No artifact returned")
+        raise RuntimeError("No image artifact returned")
 
 
 class DallE2Creator:

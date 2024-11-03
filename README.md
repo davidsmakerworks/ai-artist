@@ -5,7 +5,7 @@ received for some time, autonomously generates a new creation inspired by the
 previous scene.
 
 ## Technologies used
-- OpenAI DALL-E 2, OpenAI DALL-E 3, Stability AI SDXL or Stability AI Stable Image Ultra to generate images
+- OpenAI DALL-E 2, OpenAI DALL-E 3, Stability AI SDXL or Stability AI Stable Image to generate images
 - OpenAI GPT Chat Completion to generate verses and Whisper API to
 transcribe speech to text
 - Azure Speech API to convert text to speech
@@ -35,4 +35,7 @@ A Python vritual environment (venv) should be created to avoid conflicts with sy
 - Improve handling of new OpenAI API response format
 - Allow authenticated web access to recent creations
 - Track recent daydream topics to avoid getting stuck on particular subjects (jellyfish, mermaids, etc.)
-- Add support for Stable Image Core and Stable Diffusion 3 models
+- Add support for Stable Image Core presets in place of prompt prefixes when using Core model
+- Implement support for different image models for user prompts and daydreams (i.e., to use better model
+for user prompts and more economical model for daydreams)
+- Implement automatic resizing of returned images that don't fit the desired size

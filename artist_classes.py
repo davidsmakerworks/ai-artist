@@ -225,30 +225,51 @@ class StatusScreen:
         text_surface = font.render(text, True, pygame.Color("white"))
         self._surface.blit(text_surface, (x_pos, y_pos))
 
+
 class StableImageCreator:
     """
     Unlike the other image creator classes, there is no Python SDK for the
     Stable Image model, so this class uses the requests library to interact
     with the Stability AI API.
     """
-    def __init__(self, api_key: str, model: str) -> None:
+
+    def __init__(self, api_key: str, model: str, sd3_model: str | None = None) -> None:
+        """
+        Initialize the StableImageCreator object.
+
+        Args:
+            api_key (str): The API key for the Stability AI API.
+            model (str): The model to use for image generation.
+            sd3_model (str): The SD3 model to use for image generation if applicable
+        """
         self.api_key = api_key
         self.model = model
+        self.sd3_model = sd3_model
 
-    def generate_image_data(self, prompt: str) -> bytes:
-        # TODO: Clean thid up and add model validity checks and more model options
-        response = requests.post(
-        f"https://api.stability.ai/v2beta/stable-image/generate/{self.model}",
-        headers={
-            "authorization": f"Bearer {self.api_key}",
-            "accept": "image/*"
-        },
-        files={"none": ''},
-        data={
+    def generate_image_data(self, prompt: str, core_preset: str | None = None) -> bytes:
+        # TODO: Clean this up and add model validity checks and more model options
+
+        headers = {"authorization": f"Bearer {self.api_key}", "accept": "image/*"}
+
+        files = {"none": ""}
+
+        data = {
             "prompt": prompt,
             "output_format": "png",
-        },
-    )
+        }
+
+        if self.model == "core" and core_preset:
+            data["preset"] = core_preset
+
+        if self.sd3_model:
+            data["model"] = self.sd3_model
+
+        response = requests.post(
+            f"https://api.stability.ai/v2beta/stable-image/generate/{self.model}",
+            headers=headers,
+            files=files,
+            data=data,
+        )
 
         if response.status_code == 200:
             return response.content
@@ -257,6 +278,7 @@ class StableImageCreator:
             raise RuntimeError("Content filter triggered")
         else:
             raise RuntimeError(f"Stable Image model error: {str(response.json())}")
+
 
 class SDXLCreator:
     def __init__(

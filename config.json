@@ -20,6 +20,7 @@
     "sdxl_cfg_scale": 7.0,
     "dalle3_quality": "standard",
     "stableimage_model": "ultra",
+    "sd3_model": "sd3.5-large",
     "artist_chat_model": "gpt-4o",
     "poet_chat_model": "gpt-4o-mini",
     "critic_chat_model": "gpt-4o-mini",

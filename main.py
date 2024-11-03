@@ -411,7 +411,8 @@ def main() -> None:
 
     if image_model == "stableimage":
         stable_image_model = config["stableimage_model"]
-
+        # sd3_model must be specified in the config file even if using core/ultra
+        sd3_model = config["sd3_model"]
     try:
         openai_api_key = os.environ["OPENAI_API_KEY"]
     except KeyError:

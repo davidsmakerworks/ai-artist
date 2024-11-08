@@ -16,6 +16,7 @@
     "qr_display_time": 15,
     "prompt_display_time": 10,
     "image_model": "stableimage",
+    "daydream_image_model": "stableimage",
     "sdxl_steps": 30,
     "sdxl_cfg_scale": 7.0,
     "dalle3_quality": "standard",
@@ -24,6 +25,7 @@
     "artist_chat_model": "gpt-4o",
     "poet_chat_model": "gpt-4o-mini",
     "critic_chat_model": "gpt-4o-mini",
+    "use_poem_as_prompt": true,
     "image_base_prompts": [
         "A detailed oil painting of ",
         "A detailed watercolor of ",
@@ -53,7 +55,7 @@
         "pixel-art",
         "tile-texture"
     ],
-    "poet_system_prompt": "You are a poet who writes short light-hearted poems about various topics.",
+    "poet_system_prompt": "You are a poet who writes short light-hearted poems about various topics. You avoid the use of emojis in your poems.",
     "verse_base_prompt": "Write one short verse about ",
     "critic_system_prompt": "You are a poetry critic who evaluates poems to determine which best fits the specified theme and has the best overall poetic quality. You respond with only the number of the best poem and no other words.",
     "artist_system_prompt": "You are an imaginative artist who is inspired by various subjects. You imagine new scenes that are inspired by, but not very closely related to, the subject you are given. You respond with only one short sentence about that new scene. You use the present and progressive tenses, not the past tense. You primarily describe appearance and not actions.",
@@ -69,7 +71,7 @@
     "daydream_start_hour": 7,
     "daydream_end_hour": 18,
     "manual_daydream_window": 60,
-    "manual_daydream_limit": 6,
+    "manual_daydream_limit": 4,
     "max_recents": 10,
     "generate_button": 3,
     "daydream_button": 1,

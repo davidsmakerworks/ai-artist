@@ -36,6 +36,4 @@ A Python vritual environment (venv) should be created to avoid conflicts with sy
 - Allow authenticated web access to recent creations
 - Track recent daydream topics to avoid getting stuck on particular subjects (jellyfish, mermaids, etc.)
 - Add support for Stable Image Core presets in place of prompt prefixes when using Core model
-- Implement support for different image models for user prompts and daydreams (i.e., to use better model
-for user prompts and more economical model for daydreams)
 - Implement automatic resizing of returned images that don't fit the desired size

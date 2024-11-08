@@ -25,7 +25,7 @@ A.R.T.I.S.T. - Audio-Responsive Transformative Imagination Synthesis Technology
 
 Generates images and verses of poetry based on user voice input.
 
-Uses OpenAI DALL-E 2/DALL-E 3 or Stability AI SDXL to generate images.
+Uses OpenAI DALL-E 2/DALL-E 3 or Stability AI SDXL/Stabel Image to generate images.
 
 Uses OpenAI GPT Chat Completion to generate verses and Whisper API to transcribe speech.
 
@@ -408,6 +408,7 @@ def main() -> None:
         return
 
     image_model = config["image_model"]
+    daydream_image_model = config["daydream_image_model"]
 
     if image_model == "stableimage":
         stable_image_model = config["stableimage_model"]
@@ -420,6 +421,26 @@ def main() -> None:
         return
 
     if image_model == "sdxl" or image_model == "stableimage":
+        try:
+            stability_ai_api_key = os.environ["SAI_API_KEY"]
+        except KeyError:
+            print(
+                "Please set SAI_API_KEY environment variable for Stability AI API key."
+            )
+            return
+        
+    # TODO: Clean up repetitive code
+    if daydream_image_model == "stableimage":
+        stable_image_model = config["stableimage_model"]
+        # sd3_model must be specified in the config file even if using core/ultra
+        sd3_model = config["sd3_model"]
+    try:
+        openai_api_key = os.environ["OPENAI_API_KEY"]
+    except KeyError:
+        print("Please set OPENAI_API_KEY environment variable for OpenAI API key.")
+        return
+
+    if daydream_image_model == "sdxl" or daydream_image_model == "stableimage":
         try:
             stability_ai_api_key = os.environ["SAI_API_KEY"]
         except KeyError:
@@ -471,6 +492,9 @@ def main() -> None:
         shutdown_hold_button=config["shutdown_hold_button"],
         shutdown_press_button=config["shutdown_press_button"],
     )
+
+    # This is only recommended for LLM-based image models like Stable Image
+    use_poem_as_prompt = config["use_poem_as_prompt"]
 
     num_verses = config["num_verses"]
 
@@ -558,6 +582,39 @@ def main() -> None:
         print(f"Unknown image model {image_model}")
         logger.error(f"Unknown image model {image_model}")
         return
+    
+    # TODO: Clean up repetitive code
+    logger.debug(f"Initializing daydream painter with image model {daydream_image_model}...")
+    if image_model == "sdxl":
+        daydream_painter = SDXLCreator(
+            api_key=stability_ai_api_key,
+            img_width=img_width,
+            img_height=img_height,
+            steps=config["sdxl_steps"],
+            cfg_scale=config["sdxl_cfg_scale"],
+        )
+    elif image_model == "dalle2":
+        daydream_painter = DallE2Creator(
+            api_key=openai_api_key,
+            img_width=img_width,
+            img_height=img_height,
+        )
+    elif image_model == "dalle3":
+        daydream_painter = DallE3Creator(
+            api_key=openai_api_key,
+            img_width=img_width,
+            img_height=img_height,
+            quality=config["dalle3_quality"],
+        )
+    elif image_model == "stableimage":
+        daydream_painter = StableImageCreator(
+            api_key=stability_ai_api_key,
+            model=stable_image_model,
+        )
+    else:
+        print(f"Unknown daydream image model {daydream_image_model}")
+        logger.error(f"Unknown daydream image model {daydream_image_model}")
+        return 
 
     logger.debug("Initializing poet...")
     poet = ChatCharacter(
@@ -854,8 +911,31 @@ def main() -> None:
         creation_failed = False
 
         if can_create:
+            if use_critic:
+                logger.debug("Getting best verse...")
+                verse = get_best_verse(
+                    poet=poet,
+                    critic=critic,
+                    base_prompt=config["verse_base_prompt"],
+                    user_prompt=user_prompt,
+                    num_verses=num_verses,
+                )
+            else:
+                logger.debug("Getting one verse...")
+                verse = get_one_verse(
+                    poet=poet,
+                    base_prompt=config["verse_base_prompt"],
+                    user_prompt=user_prompt,
+                )
+            
+            if use_poem_as_prompt:
+                img_prompt = verse
+
             try:
-                img_bytes = painter.generate_image_data(prompt=img_prompt)
+                if daydream:
+                    img_bytes = daydream_painter.generate_image_data(prompt=img_prompt)
+                else:
+                    img_bytes = painter.generate_image_data(prompt=img_prompt)
             except Exception as e:
                 creation_failed = True
 

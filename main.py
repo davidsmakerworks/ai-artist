@@ -929,7 +929,8 @@ def main() -> None:
                 )
             
             if use_poem_as_prompt:
-                img_prompt = verse
+                # TODO: Fix this for better LLM-based image model compatibility
+                img_prompt = random.choice(config["image_base_prompts"]) + verse
 
             try:
                 if daydream:
@@ -940,23 +941,6 @@ def main() -> None:
                 creation_failed = True
 
             if not creation_failed:
-                if use_critic:
-                    logger.debug("Getting best verse...")
-                    verse = get_best_verse(
-                        poet=poet,
-                        critic=critic,
-                        base_prompt=config["verse_base_prompt"],
-                        user_prompt=user_prompt,
-                        num_verses=num_verses,
-                    )
-                else:
-                    logger.debug("Getting one verse...")
-                    verse = get_one_verse(
-                        poet=poet,
-                        base_prompt=config["verse_base_prompt"],
-                        user_prompt=user_prompt,
-                    )
-
                 verse_lines = verse.split("\n")
 
                 verse_lines = [line.strip() for line in verse_lines]

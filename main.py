@@ -585,7 +585,7 @@ def main() -> None:
     
     # TODO: Clean up repetitive code
     logger.debug(f"Initializing daydream painter with image model {daydream_image_model}...")
-    if image_model == "sdxl":
+    if daydream_image_model == "sdxl":
         daydream_painter = SDXLCreator(
             api_key=stability_ai_api_key,
             img_width=img_width,
@@ -593,20 +593,20 @@ def main() -> None:
             steps=config["sdxl_steps"],
             cfg_scale=config["sdxl_cfg_scale"],
         )
-    elif image_model == "dalle2":
+    elif daydream_image_model == "dalle2":
         daydream_painter = DallE2Creator(
             api_key=openai_api_key,
             img_width=img_width,
             img_height=img_height,
         )
-    elif image_model == "dalle3":
+    elif daydream_image_model == "dalle3":
         daydream_painter = DallE3Creator(
             api_key=openai_api_key,
             img_width=img_width,
             img_height=img_height,
             quality=config["dalle3_quality"],
         )
-    elif image_model == "stableimage":
+    elif daydream_image_model == "stableimage":
         daydream_painter = StableImageCreator(
             api_key=stability_ai_api_key,
             model=stable_image_model,

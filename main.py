@@ -55,6 +55,7 @@ from artist_classes import (
     ArtistCreation,
     DallE2Creator,
     DallE3Creator,
+    GptImage1Creator,
     SDXLCreator,
     StableImageCreator,
     StatusScreen,
@@ -493,8 +494,9 @@ def main() -> None:
         shutdown_press_button=config["shutdown_press_button"],
     )
 
-    # This is only recommended for LLM-based image models like Stable Image
-    use_poem_as_prompt = config["use_poem_as_prompt"]
+    # This is only recommended for LLM-based image models like Stable Image and GPT-Image-1
+    use_poem_as_user_prompt = config["use_poem_as_user_prompt"]
+    use_poem_as_daydream_prompt = config["use_poem_as_daydream_prompt"]
 
     num_verses = config["num_verses"]
 
@@ -572,6 +574,13 @@ def main() -> None:
             img_width=img_width,
             img_height=img_height,
             quality=config["dalle3_quality"],
+        )
+    elif image_model == "gpt-image-1":
+        painter = GptImage1Creator(
+            api_key=openai_api_key,
+            img_width=img_width,
+            img_height=img_height,
+            quality=config["gptimage1_quality"],
         )
     elif image_model == "stableimage":
         painter = StableImageCreator(
@@ -928,9 +937,12 @@ def main() -> None:
                     user_prompt=user_prompt,
                 )
             
-            if use_poem_as_prompt:
-                # TODO: Fix this for better LLM-based image model compatibility
+            if daydream and use_poem_as_daydream_prompt:
                 img_prompt = random.choice(config["image_base_prompts"]) + verse
+            elif not daydream and use_poem_as_user_prompt:
+                img_prompt = random.choice(config["image_base_prompts"]) + verse
+            else:
+                img_prompt = random.choice(config["image_base_prompts"]) + user_prompt
 
             try:
                 if daydream:
@@ -938,6 +950,8 @@ def main() -> None:
                 else:
                     img_bytes = painter.generate_image_data(prompt=img_prompt)
             except Exception as e:
+                logger.error(f"Error generating image")
+                logger.exception(e)
                 creation_failed = True
 
             if not creation_failed:

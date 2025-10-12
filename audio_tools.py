@@ -21,7 +21,6 @@
 # SOFTWARE.
 
 import array
-from typing import Tuple
 
 import pyaudio
 
@@ -93,7 +92,7 @@ class AudioRecorder:
         silence_threshold: int = 2000,
         min_frames: int = 18,
         max_silent_frames: int = 10,
-    ) -> Tuple[bytes, bool]:
+    ) -> tuple[bytes, bool]:
         """
         Record audio for up to max_duration seconds.
 

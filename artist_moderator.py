@@ -41,7 +41,9 @@ class ArtistModerator:
         Returns True if message is safe, False if it is not.
         """
         try:
-            response = self._openai_client.moderations.create( input=msg)
+            response = self._openai_client.moderations.create(
+                model="omni-moderation-latest", input=msg
+            )
         except Exception as e:
             logger.error(f"Moderation response: {response}")
             logger.exception(e)

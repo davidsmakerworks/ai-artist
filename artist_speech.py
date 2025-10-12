@@ -120,6 +120,15 @@ class ArtistSpeech:
         return ET.tostring(ssml_root, encoding="unicode")
 
     def speak_text(self, text: str, use_cache: bool = True) -> None:
+        """
+        Synthesizes speech from the input string of text and plays it.
+        
+        Caches audio files in the cache directory if use_cache is True.
+        The cache key is based on the combination of language, gender, voice, and text.
+
+        Caching should be used to avoid regenerating audio for the same text repeatedly,
+        which can save on costs and improve performance.
+        """
         if use_cache:
             text_details = self.language + self.gender + self.voice + text
             text_details_hash = hashlib.sha256(text_details.encode("utf-8")).hexdigest()

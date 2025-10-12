@@ -25,7 +25,7 @@ A.R.T.I.S.T. - Audio-Responsive Transformative Imagination Synthesis Technology
 
 Generates images and verses of poetry based on user voice input.
 
-Uses OpenAI DALL-E 2/DALL-E 3 or Stability AI SDXL/Stabel Image to generate images.
+Uses OpenAI DALL-E 2/DALL-E 3 or Stability AI SDXL/Stable Image to generate images.
 
 Uses OpenAI GPT Chat Completion to generate verses and Whisper API to transcribe speech.
 
@@ -43,11 +43,10 @@ import random
 import string
 import time
 from enum import Enum
-from typing import Union
 
 import pygame
 import qrcode
-from azure.storage.blob import BlobServiceClient, ContentSettings
+
 from pygame.locals import *
 
 from artist_classes import (
@@ -128,7 +127,7 @@ def init_display(width: int, height: int) -> pygame.Surface:
     return surface
 
 
-def init_joystick() -> Union[pygame.joystick.JoystickType, None]:
+def init_joystick() -> pygame.joystick.JoystickType | None:
     """
     Initialize joystick if one is connected.
 
@@ -149,9 +148,9 @@ def init_joystick() -> Union[pygame.joystick.JoystickType, None]:
 
 
 def check_for_event(
-    js: Union[pygame.joystick.JoystickType, None],
+    js: pygame.joystick.JoystickType | None,
     button_config: ButtonConfig,
-) -> Union[UserAction, None]:
+) -> UserAction | None:
     """
     Check for events and return a string representing the event if one is found.
     """
@@ -429,7 +428,7 @@ def main() -> None:
                 "Please set SAI_API_KEY environment variable for Stability AI API key."
             )
             return
-        
+
     # TODO: Clean up repetitive code
     if daydream_image_model == "stableimage":
         stable_image_model = config["stableimage_model"]
@@ -591,9 +590,11 @@ def main() -> None:
         print(f"Unknown image model {image_model}")
         logger.error(f"Unknown image model {image_model}")
         return
-    
+
     # TODO: Clean up repetitive code
-    logger.debug(f"Initializing daydream painter with image model {daydream_image_model}...")
+    logger.debug(
+        f"Initializing daydream painter with image model {daydream_image_model}..."
+    )
     if daydream_image_model == "sdxl":
         daydream_painter = SDXLCreator(
             api_key=stability_ai_api_key,
@@ -623,7 +624,7 @@ def main() -> None:
     else:
         print(f"Unknown daydream image model {daydream_image_model}")
         logger.error(f"Unknown daydream image model {daydream_image_model}")
-        return 
+        return
 
     logger.debug("Initializing poet...")
     poet = ChatCharacter(
@@ -936,7 +937,7 @@ def main() -> None:
                     base_prompt=config["verse_base_prompt"],
                     user_prompt=user_prompt,
                 )
-            
+
             if daydream and use_poem_as_daydream_prompt:
                 img_prompt = random.choice(config["image_base_prompts"]) + verse
             elif not daydream and use_poem_as_user_prompt:

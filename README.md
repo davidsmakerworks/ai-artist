@@ -5,11 +5,12 @@ received for some time, autonomously generates a new creation inspired by the
 previous scene.
 
 ## Technologies used
-- OpenAI DALL-E 2, OpenAI DALL-E 3, Stability AI SDXL or Stability AI Stable Image to generate images
+- OpenAI DALL-E 2, OpenAI DALL-E 3, Stability AI SDXL or Stability AI Stable 
+Image to generate images
 - OpenAI GPT Chat Completion to generate verses and Whisper API to
 transcribe speech to text
 - Azure Speech API to convert text to speech
-- Azure Blob Storage to store downloadable images.
+- Azure Blob Storage to store downloadable images
 
 ## API keys/services required
 - Paid OpenAI API key
@@ -29,6 +30,7 @@ A Python vritual environment (venv) should be created to avoid conflicts with sy
 
 ## Possible future enhancements
 - Cleanup and refactor
+- Use one OpenAI SDK client for entier application(?)
 - Improve error handling for any/all web requests
 - Add method to change microphone sensitivity/volume
 - Handle slow uploads to Azure Blob Storage

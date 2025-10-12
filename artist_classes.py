@@ -26,8 +26,6 @@ import requests
 
 from openai import OpenAI
 import pygame
-import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation
-from stability_sdk import client
 
 from log_config import get_logger_name
 
@@ -83,6 +81,7 @@ class ArtistCanvas:
 
     def _get_verse_font_size(self, verse_lines: list[str], max_verse_width: int) -> int:
         font_obj = pygame.font.SysFont(self._verse_font_name, self._verse_font_max_size)
+        longest_line = ""
         longest_line_size = 0
 
         # Need to check pizel size of each line to account for
@@ -295,32 +294,42 @@ class SDXLCreator:
         self.steps = steps
         self.cfg_scale = cfg_scale
 
-        self._stability_client = client.StabilityInference(
-            key=self.api_key,
-            engine="stable-diffusion-xl-1024-v1-0",
+    def generate_image_data(self, prompt: str) -> bytes | None:
+        # response = self._stability_client.generate(
+        #     prompt=prompt,
+        #     width=self.img_width,
+        #     height=self.img_height,
+        #     steps=self.steps,
+        #     cfg_scale=self.cfg_scale,
+        # )
+
+        response = requests.post(
+            "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "Accept": "image/png",
+            },
+            json={
+                "text_prompts": [{"text": prompt}],
+                "width": self.img_width,
+                "height": self.img_height,
+                "steps": self.steps,
+                "cfg_scale": self.cfg_scale,
+            },
         )
 
-    def generate_image_data(self, prompt: str) -> bytes:
-        response = self._stability_client.generate(
-            prompt=prompt,
-            width=self.img_width,
-            height=self.img_height,
-            steps=self.steps,
-            cfg_scale=self.cfg_scale,
-        )
+        if response.status_code == 200:
+            if response.headers["Finish-Reason"] == "CONTENT_FILTERED":
+                logger.error("Content filter triggered")
+                raise RuntimeError("Content filter triggered")
+            elif response.headers["Finish-Reason"] == "ERROR":
+                raise RuntimeError("Error generating image")
+            elif response.headers["Content-Type"] == "image/png":
+                return response.content
+            else:
+                raise RuntimeError("No image data returned")
 
-        for r in response:
-            for artifact in r.artifacts:
-                if artifact.finish_reason == generation.FILTER:
-                    logger.error("Content filter triggered")
-                    raise RuntimeError("Content filter triggered")
-                elif artifact.type == generation.ARTIFACT_IMAGE:
-                    return artifact.binary
-
-        raise RuntimeError("No image artifact returned")
-
-
-# TODO: Consolidate the OpenAI image creator classes into a single class
 
 class DallE2Creator:
     def __init__(self, api_key: str, img_width: int, img_height: int) -> None:
@@ -381,7 +390,7 @@ class DallE3Creator:
 
         return base64.b64decode(response.data[0].b64_json)
 
- 
+
 class GptImage1Creator:
     def __init__(
         self, api_key: str, img_width: int, img_height: int, quality: str = "medium"

@@ -44,9 +44,14 @@ class ArtistStorage:
     def upload_blob(self, blob_name: str, data: bytes, content_type: str) -> None:
         content_settings = ContentSettings(content_type=content_type)
 
-        self._blob_container_client.upload_blob(
-            name=blob_name,
-            data=data,
-            overwrite=True,
-            content_settings=content_settings,
-        )
+        try:
+            self._blob_container_client.upload_blob(
+                name=blob_name,
+                data=data,
+                overwrite=True,
+                content_settings=content_settings,
+            )
+        except Exception as e:
+            logger.error(f"Error uploading blob: {blob_name}")
+            logger.exception(e)
+            raise

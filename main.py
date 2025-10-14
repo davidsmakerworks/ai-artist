@@ -410,44 +410,11 @@ def main() -> None:
     image_model = config["image_model"]
     daydream_image_model = config["daydream_image_model"]
 
-    if image_model == "stableimage":
-        stable_image_model = config["stableimage_model"]
-        # sd3_model must be specified in the config file even if using core/ultra
-        sd3_model = config["sd3_model"]
     try:
         openai_api_key = os.environ["OPENAI_API_KEY"]
     except KeyError:
         print("Please set OPENAI_API_KEY environment variable for OpenAI API key.")
         return
-
-    if image_model == "sdxl" or image_model == "stableimage":
-        try:
-            stability_ai_api_key = os.environ["SAI_API_KEY"]
-        except KeyError:
-            print(
-                "Please set SAI_API_KEY environment variable for Stability AI API key."
-            )
-            return
-
-    # TODO: Clean up repetitive code
-    if daydream_image_model == "stableimage":
-        stable_image_model = config["stableimage_model"]
-        # sd3_model must be specified in the config file even if using core/ultra
-        sd3_model = config["sd3_model"]
-    try:
-        openai_api_key = os.environ["OPENAI_API_KEY"]
-    except KeyError:
-        print("Please set OPENAI_API_KEY environment variable for OpenAI API key.")
-        return
-
-    if daydream_image_model == "sdxl" or daydream_image_model == "stableimage":
-        try:
-            stability_ai_api_key = os.environ["SAI_API_KEY"]
-        except KeyError:
-            print(
-                "Please set SAI_API_KEY environment variable for Stability AI API key."
-            )
-            return
 
     try:
         azure_speech_region = os.environ["AZURE_SPEECH_REGION"]
@@ -458,6 +425,26 @@ def main() -> None:
             "Please set environment variables for Azure API keys: AZURE_SPEECH_REGION, AZURE_SPEECH_KEY, AZURE_STORAGE_KEY."
         )
         return
+
+    if image_model in ["sdxl", "stableimage"] or daydream_image_model in [
+        "sdxl",
+        "stableimage",
+    ]:
+        try:
+            stability_ai_api_key = os.environ["SAI_API_KEY"]
+        except KeyError:
+            print(
+                "Please set SAI_API_KEY environment variable for Stability AI API key."
+            )
+            return
+
+    if image_model == "stableimage" or daydream_image_model == "stableimage":
+        stable_image_svc = config["stableimage_svc"]
+
+        if stable_image_svc == "sd3":
+            sd3_model = config["sd3_model"]
+        else:
+            sd3_model = None
 
     logger.info("*** Starting A.R.T.I.S.T. ***")
 
@@ -478,6 +465,13 @@ def main() -> None:
     img_width = config["img_width"]
     img_height = config["img_height"]
 
+    if img_width != img_height:
+        print(
+            "Currently only square images are supported (img_width must equal img_height)."
+        )
+        logger.error("img_width must equal img_height.")
+        return
+
     display_width = config["display_width"]
     display_height = config["display_height"]
 
@@ -496,6 +490,9 @@ def main() -> None:
     # This is only recommended for LLM-based image models like Stable Image and GPT-Image-1
     use_poem_as_user_prompt = config["use_poem_as_user_prompt"]
     use_poem_as_daydream_prompt = config["use_poem_as_daydream_prompt"]
+
+    # This only applies when using Stable Core service
+    use_stable_core_presets = config["use_stable_core_presets"]
 
     num_verses = config["num_verses"]
 
@@ -584,7 +581,8 @@ def main() -> None:
     elif image_model == "stableimage":
         painter = StableImageCreator(
             api_key=stability_ai_api_key,
-            model=stable_image_model,
+            service=stable_image_svc,
+            sd3_model=sd3_model,
         )
     else:
         print(f"Unknown image model {image_model}")
@@ -619,7 +617,8 @@ def main() -> None:
     elif daydream_image_model == "stableimage":
         daydream_painter = StableImageCreator(
             api_key=stability_ai_api_key,
-            model=stable_image_model,
+            service=stable_image_svc,
+            sd3_model=sd3_model,
         )
     else:
         print(f"Unknown daydream image model {daydream_image_model}")
@@ -945,11 +944,38 @@ def main() -> None:
             else:
                 img_prompt = random.choice(config["image_base_prompts"]) + user_prompt
 
+            # TODO: Improve handling of Stable Core style presets
             try:
                 if daydream:
-                    img_bytes = daydream_painter.generate_image_data(prompt=img_prompt)
+                    if (
+                        daydream_image_model == "stableimage"
+                        and stable_image_svc == "core"
+                        and use_stable_core_presets
+                    ):
+                        img_bytes = daydream_painter.generate_image_data(
+                            prompt=user_prompt,  # Use raw prompt only without base prompt
+                            core_preset=random.choice(
+                                config["stable_core_style_presets"]
+                            ),
+                        )
+                    else:
+                        img_bytes = daydream_painter.generate_image_data(
+                            prompt=img_prompt
+                        )
                 else:
-                    img_bytes = painter.generate_image_data(prompt=img_prompt)
+                    if (
+                        image_model == "stableimage"
+                        and stable_image_svc == "core"
+                        and use_stable_core_presets
+                    ):
+                        img_bytes = painter.generate_image_data(
+                            prompt=user_prompt,  # Use raw prompt only without base prompt
+                            core_preset=random.choice(
+                                config["stable_core_style_presets"]
+                            ),
+                        )
+                    else:
+                        img_bytes = painter.generate_image_data(prompt=img_prompt)
             except Exception as e:
                 logger.error(f"Error generating image")
                 logger.exception(e)
@@ -975,6 +1001,12 @@ def main() -> None:
                 # raw_image.png is a name hint to assist in file format detection, not
                 # an actual file on disk
                 img = pygame.image.load(io.BytesIO(img_bytes), "raw_image.png")
+
+                if img.get_width() != img_width or img.get_height() != img_height:
+                    logger.warning(
+                        f"Image has unexpected dimensions {img.get_width()}x{img.get_height()}, expected {img_width}x{img_height}"
+                    )
+                    img = pygame.transform.smoothscale(img, (img_width, img_height))
 
                 creation = ArtistCreation(img, verse_lines, user_prompt, daydream)
                 artist_canvas.render_creation(creation, img_side)

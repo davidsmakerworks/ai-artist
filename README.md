@@ -26,16 +26,14 @@ For Debian/Ubuntu, you may need to manually compile and install OpenSSL 1.1 beca
 the Azure Cognitive Services Speech SDK does not yet support OpenSSL 3.0. Instructions
 for installation are [here](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/quickstarts/setup-platform?tabs=linux%2Cubuntu%2Cdotnetcli%2Cdotnet%2Cjre%2Cmaven%2Cnodejs%2Cmac%2Cpypi&pivots=programming-language-python).
 
-A Python vritual environment (venv) should be created to avoid conflicts with system packages.
+A Python virtual environment (venv) should be created to avoid conflicts with system packages.
 
 ## Possible future enhancements
 - Cleanup and refactor
-- Use one OpenAI SDK client for entier application(?)
+- Use one OpenAI SDK client for entire application(?)
 - Improve error handling for any/all web requests
 - Add method to change microphone sensitivity/volume
 - Handle slow uploads to Azure Blob Storage
 - Improve handling of new OpenAI API response format
 - Allow authenticated web access to recent creations
 - Track recent daydream topics to avoid getting stuck on particular subjects (jellyfish, mermaids, etc.)
-- Add support for Stable Image Core presets in place of prompt prefixes when using Core model
-- Implement automatic resizing of returned images that don't fit the desired size

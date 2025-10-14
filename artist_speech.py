@@ -122,7 +122,7 @@ class ArtistSpeech:
     def speak_text(self, text: str, use_cache: bool = True) -> None:
         """
         Synthesizes speech from the input string of text and plays it.
-        
+
         Caches audio files in the cache directory if use_cache is True.
         The cache key is based on the combination of language, gender, voice, and text.
 

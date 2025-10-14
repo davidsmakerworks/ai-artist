@@ -226,45 +226,47 @@ class StatusScreen:
 
 
 class StableImageCreator:
-    """
-    Unlike the other image creator classes, there is no Python SDK for the
-    Stable Image model, so this class uses the requests library to interact
-    with the Stability AI API.
-    """
-
-    def __init__(self, api_key: str, model: str, sd3_model: str | None = None) -> None:
+    def __init__(self, api_key: str, service: str, sd3_model: str | None = None) -> None:
         """
         Initialize the StableImageCreator object.
 
         Args:
             api_key (str): The API key for the Stability AI API.
-            model (str): The model to use for image generation.
+            service (str): The service to use for image generation.
             sd3_model (str): The SD3 model to use for image generation if applicable
         """
         self.api_key = api_key
-        self.model = model
+        self.service = service
         self.sd3_model = sd3_model
 
     def generate_image_data(self, prompt: str, core_preset: str | None = None) -> bytes:
-        # TODO: Clean this up and add model validity checks and more model options
+        # Check this here instead of in initializer to allow for
+        # dynamic model switching
+        if self.service not in ["core", "ultra", "sd3"]:
+            raise ValueError(f"Invalid Stable Image service specified: {self.service}")
 
-        headers = {"authorization": f"Bearer {self.api_key}", "accept": "image/*"}
+        headers = {
+            "authorization": f"Bearer {self.api_key}",
+            "accept": "image/*",
+            "stability-client-id": "A.R.T.I.S.T.",
+        }
 
         files = {"none": ""}
 
         data = {
             "prompt": prompt,
+            "aspect_ratio": "1:1",
             "output_format": "png",
         }
 
-        if self.model == "core" and core_preset:
-            data["preset"] = core_preset
+        if self.service == "core" and core_preset:
+            data["style_preset"] = core_preset
 
         if self.sd3_model:
             data["model"] = self.sd3_model
 
         response = requests.post(
-            f"https://api.stability.ai/v2beta/stable-image/generate/{self.model}",
+            f"https://api.stability.ai/v2beta/stable-image/generate/{self.service}",
             headers=headers,
             files=files,
             data=data,
@@ -295,14 +297,6 @@ class SDXLCreator:
         self.cfg_scale = cfg_scale
 
     def generate_image_data(self, prompt: str) -> bytes | None:
-        # response = self._stability_client.generate(
-        #     prompt=prompt,
-        #     width=self.img_width,
-        #     height=self.img_height,
-        #     steps=self.steps,
-        #     cfg_scale=self.cfg_scale,
-        # )
-
         response = requests.post(
             "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image",
             headers={

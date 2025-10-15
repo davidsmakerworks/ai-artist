@@ -455,6 +455,9 @@ def main() -> None:
 
     recents_file_name = config["recents_file_name"]
 
+    max_recents = config["max_recents"]
+    num_recents_for_daydream = config["num_recents_for_daydream"]
+
     storage_account = config["storage_account"]
     storage_container = config["storage_container"]
 
@@ -897,8 +900,19 @@ def main() -> None:
             if user_action == UserAction.DAYDREAM:
                 speech_svc.speak_text(text=random.choice(config["daydream_lines"]))
 
-            if previous_user_prompt:
-                daydream_prompt = previous_user_prompt
+            # if previous_user_prompt:
+            #     daydream_prompt = previous_user_prompt
+            # else:
+            #     daydream_prompt = " something completely random."
+
+            if len(recents) >= num_recents_for_daydream:
+                daydream_prompt = " , ".join(           
+                    [r["prompt"] for r in recents[-num_recents_for_daydream:]]
+                )
+            elif len(recents) > 0:
+                daydream_prompt = " , ".join(           
+                    [r["prompt"] for r in recents]
+                )
             else:
                 daydream_prompt = " something completely random."
 
@@ -1068,8 +1082,8 @@ def main() -> None:
                     }
                 )
 
-                if len(recents) > config["max_recents"]:
-                    recents = recents[-config["max_recents"] :]
+                if len(recents) > max_recents:
+                    recents = recents[-max_recents:]
 
                 save_recents(recents, recents_file_name)
 

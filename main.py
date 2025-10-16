@@ -900,19 +900,12 @@ def main() -> None:
             if user_action == UserAction.DAYDREAM:
                 speech_svc.speak_text(text=random.choice(config["daydream_lines"]))
 
-            # if previous_user_prompt:
-            #     daydream_prompt = previous_user_prompt
-            # else:
-            #     daydream_prompt = " something completely random."
-
             if len(recents) >= num_recents_for_daydream:
-                daydream_prompt = " , ".join(           
+                daydream_prompt = " , ".join(
                     [r["prompt"] for r in recents[-num_recents_for_daydream:]]
                 )
             elif len(recents) > 0:
-                daydream_prompt = " , ".join(           
-                    [r["prompt"] for r in recents]
-                )
+                daydream_prompt = " , ".join([r["prompt"] for r in recents])
             else:
                 daydream_prompt = " something completely random."
 

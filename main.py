@@ -27,7 +27,11 @@ Generates images and verses of poetry based on user voice input.
 
 Uses OpenAI DALL-E 2/DALL-E 3 or Stability AI SDXL/Stable Image to generate images.
 
-Uses OpenAI GPT Chat Completion to generate verses and Whisper API to transcribe speech.
+Uses OpenAI GPT Chat Completion or Anthropic Claude to generate verses and
+daydream image prompts, and to choose the best verse from multiple options if
+the critic is enabled.
+
+Uses Whisper API to transcribe speech.
 
 Uses Azure Speech API to convert text to speech.
 
@@ -65,6 +69,7 @@ from artist_storage import ArtistStorage
 from audio_tools import AudioRecorder
 from log_config import create_global_logger
 from openai_tools import ChatCharacter, Transcriber
+from anthropic_tools import ClaudeChatCharacter
 
 
 # Global logger object to avoid passing logger to many functions
@@ -409,6 +414,7 @@ def main() -> None:
 
     image_model = config["image_model"]
     daydream_image_model = config["daydream_image_model"]
+    chat_service = config["chat_service"]
 
     try:
         openai_api_key = os.environ["OPENAI_API_KEY"]
@@ -425,6 +431,15 @@ def main() -> None:
             "Please set environment variables for Azure API keys: AZURE_SPEECH_REGION, AZURE_SPEECH_KEY, AZURE_STORAGE_KEY."
         )
         return
+    
+    if chat_service == "anthropic":
+        try:
+            anthropic_api_key = os.environ["ANTHROPIC_API_KEY"]
+        except KeyError:
+            print(
+                "Please set ANTHROPIC_API_KEY environment variable for Anthropic API key."
+            )
+            return
 
     if image_model in ["sdxl", "stableimage"] or daydream_image_model in [
         "sdxl",
@@ -499,8 +514,8 @@ def main() -> None:
 
     num_verses = config["num_verses"]
 
-    # Critic is recommended for best results, but can be disabled to save tokens when
-    # using GPT-4 chat completion API
+    # Critic is recommended for best results with smaller models, but can be
+    # disabled to save tokens when using GPT-4+ or Claude chat completion API
     use_critic = config["use_critic"]
 
     min_daydream_time = config["min_daydream_time"] * 60  # Convert to seconds
@@ -546,11 +561,22 @@ def main() -> None:
     )
 
     logger.debug("Initialzing autonomous AI artist...")
-    ai_artist = ChatCharacter(
-        system_prompt=config["artist_system_prompt"],
-        model=config["artist_chat_model"],
-        api_key=openai_api_key,
-    )
+    if chat_service == "anthropic":
+        ai_artist = ClaudeChatCharacter(
+            system_prompt=config["artist_system_prompt"],
+            model=config["artist_chat_model"],
+            api_key=anthropic_api_key,
+        )
+    elif chat_service == "openai":
+        ai_artist = ChatCharacter(
+            system_prompt=config["artist_system_prompt"],
+            model=config["artist_chat_model"],
+            api_key=openai_api_key,
+        )
+    else:
+        print(f"Invalid chat service {chat_service}")
+        logger.error(f"Invalid chat service {chat_service}")
+        return
 
     logger.debug(f"Initializing painter with image model {image_model}...")
     if image_model == "sdxl":
@@ -629,22 +655,45 @@ def main() -> None:
         return
 
     logger.debug("Initializing poet...")
-    poet = ChatCharacter(
-        system_prompt=config["poet_system_prompt"],
-        model=config["poet_chat_model"],
-        api_key=openai_api_key,
-        temperature=config["poet_temperature"],
-        presence_penalty=config["poet_presence_penalty"],
-        frequency_penalty=config["poet_frequency_penalty"],
-    )
+    if chat_service == "anthropic":
+        poet = ClaudeChatCharacter(
+            system_prompt=config["poet_system_prompt"],
+            model=config["poet_chat_model"],
+            api_key=anthropic_api_key,
+            temperature=config["poet_temperature"],
+        )
+    elif chat_service == "openai":
+        poet = ChatCharacter(
+            system_prompt=config["poet_system_prompt"],
+            model=config["poet_chat_model"],
+            api_key=openai_api_key,
+            temperature=config["poet_temperature"],
+            presence_penalty=config["poet_presence_penalty"],
+            frequency_penalty=config["poet_frequency_penalty"],
+        )
+    else:
+        print(f"Invalid chat service {chat_service}")
+        logger.error(f"Invalid chat service {chat_service}")
+        return
 
     if use_critic:
         logger.debug("Initializing critic...")
-        critic = ChatCharacter(
-            system_prompt=config["critic_system_prompt"],
-            model=config["critic_chat_model"],
-            api_key=openai_api_key,
-        )
+        if chat_service == "anthropic":
+            critic = ClaudeChatCharacter(
+                system_prompt=config["critic_system_prompt"],
+                model=config["critic_chat_model"],
+                api_key=anthropic_api_key,
+            )
+        elif chat_service == "openai":
+            critic = ChatCharacter(
+                system_prompt=config["critic_system_prompt"],
+                model=config["critic_chat_model"],
+                api_key=openai_api_key,
+            )
+        else:
+            print(f"Invalid chat service {chat_service}")
+            logger.error(f"Invalid chat service {chat_service}")
+            return
 
     logger.debug("Initializing moderator...")
     moderator = ArtistModerator(api_key=openai_api_key)

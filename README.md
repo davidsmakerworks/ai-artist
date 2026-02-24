@@ -7,8 +7,10 @@ previous scene.
 ## Technologies used
 - OpenAI DALL-E 2, OpenAI DALL-E 3, Stability AI SDXL or Stability AI Stable 
 Image to generate images
-- OpenAI GPT Chat Completion to generate verses and Whisper API to
-transcribe speech to text
+- OpenAI GPT Chat Completion or Anthropic Claude to generate verses and
+daydream image prompts, and to choose the best verse from multiple options if
+the critic is enabled.
+- OpenAI Whisper API to transcribe speech.
 - Azure Speech API to convert text to speech
 - Azure Blob Storage to store downloadable images
 
@@ -17,6 +19,7 @@ transcribe speech to text
 - Azure Cognitive Services Speech Service (free tier)
 - Azure Storage account
 - Paid Stability AI API key if using SDXL or Stable Image
+- Paid Anthropic API key if using Claude
 
 The code needs additional refactoring to make things like error handling more
 practical. For now, a brute-force approach of automatically restarting if there is 
@@ -29,7 +32,7 @@ for installation are [here](https://learn.microsoft.com/en-us/azure/ai-services/
 A Python virtual environment (venv) should be created to avoid conflicts with system packages.
 
 ## Possible future enhancements
-- Cleanup and refactor
+- Cleanup and refactor (desperately needed)
 - Use one OpenAI SDK client for entire application(?)
 - Improve error handling for any/all web requests
 - Add method to change microphone sensitivity/volume
@@ -37,3 +40,4 @@ A Python virtual environment (venv) should be created to avoid conflicts with sy
 - Improve handling of new OpenAI API response format
 - Allow authenticated web access to recent creations
 - Track recent daydream topics to avoid getting stuck on particular subjects (jellyfish, mermaids, etc.)
+- Use AI to optimize image prompt based on type of prompt the model expects

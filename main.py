@@ -630,11 +630,12 @@ def load_config(path: str) -> AppConfig | None:
 
     anthropic_api_key = None
     if config["chat_service"] == "anthropic":
-        try:
-            anthropic_api_key = os.environ["ANTHROPIC_API_KEY"]
-        except KeyError:
+        anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get(
+            "CLAUDE_API_KEY"
+        )
+        if anthropic_api_key is None:
             print(
-                "Please set ANTHROPIC_API_KEY environment variable for Anthropic API key."
+                "Please set ANTHROPIC_API_KEY or CLAUDE_API_KEY environment variable for Anthropic API key."
             )
             return None
 
@@ -884,9 +885,13 @@ def capture_user_audio(
     Record and transcribe user audio. Mutates state.user_prompt. Returns True if silence detected.
     """
     show_status_screen(surface=disp_surface, text=" ", status_screen_obj=status_screen)
-    greeting_phrase = random.choice(cfg.welcome_words) + " " + random.choice(cfg.welcome_lines)
+    greeting_phrase = (
+        random.choice(cfg.welcome_words) + " " + random.choice(cfg.welcome_lines)
+    )
     speech_svc.speak_text(text=greeting_phrase)
-    show_status_screen(surface=disp_surface, text="Listening...", status_screen_obj=status_screen)
+    show_status_screen(
+        surface=disp_surface, text="Listening...", status_screen_obj=status_screen
+    )
     logger.debug("Recording...")
 
     silent_loops = 0
@@ -896,7 +901,9 @@ def capture_user_audio(
         (in_stream, valid_audio) = audio_recorder.record(cfg.max_recording_time)
         if valid_audio:
             audio_detected = True
-            show_status_screen(surface=disp_surface, text="Working...", status_screen_obj=status_screen)
+            show_status_screen(
+                surface=disp_surface, text="Working...", status_screen_obj=status_screen
+            )
             speech_svc.speak_text(text=random.choice(cfg.working_lines))
             state.user_prompt = transcriber.transcribe(audio_stream=in_stream)
             logger.info(f"Transcribed: {state.user_prompt}")
@@ -906,7 +913,9 @@ def capture_user_audio(
 
     if not audio_detected:
         logger.debug("Silence detected")
-        show_status_screen(surface=disp_surface, text="Ready", status_screen_obj=status_screen)
+        show_status_screen(
+            surface=disp_surface, text="Ready", status_screen_obj=status_screen
+        )
         return True
 
     return False
@@ -925,7 +934,9 @@ def generate_daydream_prompt(
     Generate an AI prompt from recent creations, storing the result in state.user_prompt.
     """
     ai_artist.reset()
-    show_status_screen(surface=disp_surface, text="Daydreaming...", status_screen_obj=status_screen)
+    show_status_screen(
+        surface=disp_surface, text="Daydreaming...", status_screen_obj=status_screen
+    )
 
     # Only speak line if daydream is manually initiated
     if user_action == UserAction.DAYDREAM:
@@ -1171,14 +1182,26 @@ def run_creation_pipeline(
 
     Returns True if the outer loop should continue without creating
     (silence detected with no valid audio). Mutates state in place.
+
+    Return value is currently unused.
     """
     if not state.daydream:
         logger.info("=== Starting new creation ===")
-        if capture_user_audio(cfg, speech_svc, audio_recorder, transcriber, disp_surface, status_screen, state):
+        if capture_user_audio(
+            cfg,
+            speech_svc,
+            audio_recorder,
+            transcriber,
+            disp_surface,
+            status_screen,
+            state,
+        ):
             return True
     else:
         logger.info("=== Starting daydream ===")
-        generate_daydream_prompt(cfg, state, ai_artist, speech_svc, user_action, disp_surface, status_screen)
+        generate_daydream_prompt(
+            cfg, state, ai_artist, speech_svc, user_action, disp_surface, status_screen
+        )
 
     state.base_file_name = get_random_string(cfg.file_name_length)
     logger.info(f"Base name: {state.base_file_name}")
@@ -1200,14 +1223,25 @@ def run_creation_pipeline(
             img_prompt = random.choice(cfg.image_base_prompts) + state.user_prompt
 
         try:
-            img_bytes = generate_image_with_prompt(cfg, state, painter, daydream_painter, img_prompt)
+            img_bytes = generate_image_with_prompt(
+                cfg, state, painter, daydream_painter, img_prompt
+            )
         except Exception as e:
             logger.error("Error generating image")
             logger.exception(e)
             creation_failed = True
 
         if not creation_failed:
-            render_creation_display(cfg, state, verse, img_bytes, speech_svc, user_action, artist_canvas, disp_surface)
+            render_creation_display(
+                cfg,
+                state,
+                verse,
+                img_bytes,
+                speech_svc,
+                user_action,
+                artist_canvas,
+                disp_surface,
+            )
             screenshot_file_name = save_creation_locally(cfg, state, disp_surface)
             upload_creation_to_storage(cfg, state, storage, screenshot_file_name)
             update_recents_and_scheduling(cfg, state)
@@ -1419,9 +1453,8 @@ def main() -> None:
     logger.debug("Loading recent creations...")
     state = AppState(
         recents=load_recents(cfg.recents_file_name),
-        next_change_time=time.monotonic() + random.randint(
-            cfg.min_daydream_time, cfg.max_daydream_time
-        ),
+        next_change_time=time.monotonic()
+        + random.randint(cfg.min_daydream_time, cfg.max_daydream_time),
     )
 
     show_status_screen(
@@ -1450,7 +1483,9 @@ def main() -> None:
             pygame.quit()
             return
 
-        if run_creation_pipeline(
+        # Return value is currently unused since creation pipeline handles all user interactions
+        # internally, but may be useful for future refactoring
+        _ = run_creation_pipeline(
             user_action,
             cfg,
             speech_svc,
@@ -1467,8 +1502,7 @@ def main() -> None:
             storage,
             disp_surface,
             state,
-        ):
-            continue
+        )
 
 
 if __name__ == "__main__":

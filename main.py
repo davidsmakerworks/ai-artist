@@ -517,7 +517,9 @@ class AppConfig:
 
 @dataclass
 class AppState:
-    """Mutable runtime state for the main application loop."""
+    """
+    Mutable runtime state for the main application loop.
+    """
 
     daydream: bool = False
     manual_daydream_timestamps: list = field(default_factory=list)
@@ -753,7 +755,8 @@ def wait_for_action(
     artist_canvas: ArtistCanvas,
     state: AppState,
 ) -> UserAction | None:
-    """Block until a user action or auto-daydream trigger.
+    """
+    Block until a user action or auto-daydream trigger.
 
     Handles display updates for SHOW_PROMPT, SHOW_QR, and recents navigation
     as side effects. Mutates state in place. Returns the UserAction that
@@ -877,7 +880,9 @@ def capture_user_audio(
     status_screen: StatusScreen,
     state: AppState,
 ) -> bool:
-    """Record and transcribe user audio. Mutates state.user_prompt. Returns True if silence detected."""
+    """
+    Record and transcribe user audio. Mutates state.user_prompt. Returns True if silence detected.
+    """
     show_status_screen(surface=disp_surface, text=" ", status_screen_obj=status_screen)
     greeting_phrase = random.choice(cfg.welcome_words) + " " + random.choice(cfg.welcome_lines)
     speech_svc.speak_text(text=greeting_phrase)
@@ -916,7 +921,9 @@ def generate_daydream_prompt(
     disp_surface: pygame.Surface,
     status_screen: StatusScreen,
 ) -> None:
-    """Generate an AI prompt from recent creations, storing the result in state.user_prompt."""
+    """
+    Generate an AI prompt from recent creations, storing the result in state.user_prompt.
+    """
     ai_artist.reset()
     show_status_screen(surface=disp_surface, text="Daydreaming...", status_screen_obj=status_screen)
 
@@ -941,7 +948,9 @@ def generate_daydream_prompt(
 
 
 def generate_verse(cfg: AppConfig, poet, critic, state: AppState) -> str:
-    """Generate a verse using the poet, optionally with critic selection."""
+    """
+    Generate a verse using the poet, optionally with critic selection.
+    """
     if cfg.use_critic:
         logger.debug("Getting best verse...")
         return get_best_verse(
@@ -967,7 +976,9 @@ def generate_image_with_prompt(
     daydream_painter,
     img_prompt: str,
 ) -> bytes:
-    """Generate image bytes using the appropriate painter and prompt. May raise on failure."""
+    """
+    Generate image bytes using the appropriate painter and prompt. May raise on failure.
+    """
     # TODO: Improve handling of Stable Core style presets
     if state.daydream:
         if (
@@ -1005,7 +1016,9 @@ def render_creation_display(
     artist_canvas: ArtistCanvas,
     disp_surface: pygame.Surface,
 ) -> None:
-    """Load the generated image, render the verse overlay, and update the display."""
+    """
+    Load the generated image, render the verse overlay, and update the display.
+    """
     verse_lines = [line.strip() for line in verse.split("\n")]
     logger.info(f"Verse: {'/'.join(verse_lines)}")
 
@@ -1038,7 +1051,9 @@ def save_creation_locally(
     state: AppState,
     disp_surface: pygame.Surface,
 ) -> str:
-    """Save the current display as a PNG screenshot. Returns the screenshot filename."""
+    """
+    Save the current display as a PNG screenshot. Returns the screenshot filename.
+    """
     logger.debug("Saving creation...")
     screenshot_file_name = state.base_file_name + ".png"
     pygame.image.save(disp_surface, os.path.join(cfg.output_dir, screenshot_file_name))
@@ -1051,7 +1066,9 @@ def upload_creation_to_storage(
     storage: ArtistStorage,
     screenshot_file_name: str,
 ) -> None:
-    """Upload the HTML page and PNG screenshot to Azure blob storage."""
+    """
+    Upload the HTML page and PNG screenshot to Azure blob storage.
+    """
     logger.debug("Uploading creation...")
     image_url = f"https://{cfg.storage_account}.blob.core.windows.net/{cfg.storage_container}/{screenshot_file_name}"
 
@@ -1091,7 +1108,9 @@ def upload_creation_to_storage(
 
 
 def update_recents_and_scheduling(cfg: AppConfig, state: AppState) -> None:
-    """Append the current creation to the recents list and schedule the next auto-daydream."""
+    """
+    Append the current creation to the recents list and schedule the next auto-daydream.
+    """
     logger.debug("Updating recent creations...")
     state.recents.append(
         {
@@ -1118,7 +1137,9 @@ def handle_creation_failure(
     disp_surface: pygame.Surface,
     status_screen: StatusScreen,
 ) -> None:
-    """Display the failure status screen and speak a failure line."""
+    """
+    Display the failure status screen and speak a failure line.
+    """
     show_status_screen(
         surface=disp_surface,
         text="Creation failed!",
@@ -1145,7 +1166,8 @@ def run_creation_pipeline(
     disp_surface: pygame.Surface,
     state: AppState,
 ) -> bool:
-    """Execute a manual creation or daydream creation pipeline.
+    """
+    Execute a manual creation or daydream creation pipeline.
 
     Returns True if the outer loop should continue without creating
     (silence detected with no valid audio). Mutates state in place.
@@ -1197,7 +1219,9 @@ def run_creation_pipeline(
 
 
 def create_painter(model: str, cfg: AppConfig):
-    """Factory function to create an image generation model instance."""
+    """
+    Factory function to create an image generation model instance.
+    """
     if model == "sdxl":
         return SDXLCreator(
             api_key=cfg.stability_ai_api_key,
@@ -1244,7 +1268,9 @@ def create_chat_character(
     presence_penalty: float = 0.0,
     frequency_penalty: float = 0.0,
 ):
-    """Factory function to create a chat character using the configured chat service."""
+    """
+    Factory function to create a chat character using the configured chat service.
+    """
     if cfg.chat_service == "anthropic":
         return ClaudeChatCharacter(
             system_prompt=system_prompt,

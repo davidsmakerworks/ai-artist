@@ -13,6 +13,7 @@ the critic is enabled.
 - OpenAI Whisper API to transcribe speech.
 - Azure Speech API to convert text to speech
 - Azure Blob Storage to store downloadable images
+- Claude Code to assist with refactoring and feature implementation
 
 ## API keys/services required
 - Paid OpenAI API key
@@ -32,7 +33,7 @@ for installation are [here](https://learn.microsoft.com/en-us/azure/ai-services/
 A Python virtual environment (venv) should be created to avoid conflicts with system packages.
 
 ## Possible future enhancements
-- Cleanup and refactor (desperately needed)
+- Cleanup and refactor (in progress - AI assisted)
 - Use one OpenAI SDK client for entire application(?)
 - Improve error handling for any/all web requests
 - Add method to change microphone sensitivity/volume

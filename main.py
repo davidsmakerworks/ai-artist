@@ -503,6 +503,12 @@ class AppConfig:
     critic_system_prompt: str | None = None
     use_poem_as_user_prompt: bool = False
     use_poem_as_daydream_prompt: bool = False
+    enhancer_chat_model: str | None = None
+    user_prompt_enhancement_type: str | None = None
+    daydream_prompt_enhancement_type: str | None = None
+    enhancer_system_prompt: str | None = None
+    llm_enhancer_base_prompt: str | None = None
+    token_enhancer_base_prompt: str | None = None
     sdxl_steps: int | None = None
     sdxl_cfg_scale: float | None = None
     dalle3_quality: str | None = None
@@ -680,6 +686,12 @@ def load_config(path: str) -> AppConfig | None:
         image_base_prompts=config["image_base_prompts"],
         use_poem_as_user_prompt=config.get("use_poem_as_user_prompt", False),
         use_poem_as_daydream_prompt=config.get("use_poem_as_daydream_prompt", False),
+        enhancer_chat_model=config.get("enhancer_chat_model"),
+        user_prompt_enhancement_type=config.get("user_prompt_enhancement_type"),
+        daydream_prompt_enhancement_type=config.get("daydream_prompt_enhancement_type"),
+        enhancer_system_prompt=config.get("enhancer_system_prompt"),
+        llm_enhancer_base_prompt=config.get("llm_enhancer_base_prompt"),
+        token_enhancer_base_prompt=config.get("token_enhancer_base_prompt"),
         sdxl_steps=config.get("sdxl_steps"),
         sdxl_cfg_scale=config.get("sdxl_cfg_scale"),
         dalle3_quality=config.get("dalle3_quality"),
@@ -980,6 +992,21 @@ def generate_verse(cfg: AppConfig, poet, critic, state: AppState) -> str:
         )
 
 
+def enhance_poem(enhancer, base_prompt: str | None, verse: str) -> str:
+    """
+    Enhance a poem using the enhancer character to produce an image generation prompt.
+    Falls back to the original verse if enhancement fails.
+    """
+    enhancer.reset()
+
+    try:
+        return enhancer.get_chat_response((base_prompt or "") + verse).content
+    except Exception as e:
+        logger.error("Error enhancing poem")
+        logger.exception(e)
+        return verse
+
+
 def generate_image_with_prompt(
     cfg: AppConfig,
     state: AppState,
@@ -1170,6 +1197,7 @@ def run_creation_pipeline(
     daydream_painter,
     poet,
     critic,
+    enhancer,
     moderator: ArtistModerator,
     artist_canvas: ArtistCanvas,
     status_screen: StatusScreen,
@@ -1215,12 +1243,35 @@ def run_creation_pipeline(
     if can_create:
         verse = generate_verse(cfg, poet, critic, state)
 
-        if state.daydream and cfg.use_poem_as_daydream_prompt:
-            img_prompt = random.choice(cfg.image_base_prompts) + verse
-        elif not state.daydream and cfg.use_poem_as_user_prompt:
-            img_prompt = random.choice(cfg.image_base_prompts) + verse
+        use_poem = (state.daydream and cfg.use_poem_as_daydream_prompt) or (
+            not state.daydream and cfg.use_poem_as_user_prompt
+        )
+
+        if use_poem:
+            enhancement_type = (
+                cfg.daydream_prompt_enhancement_type
+                if state.daydream
+                else cfg.user_prompt_enhancement_type
+            )
+            verse_log = verse.replace("\n", "/")
+            logger.info(f"Poem (original): {verse_log}")
+
+            if enhancer is not None and enhancement_type == "llm":
+                enhanced = enhance_poem(enhancer, cfg.llm_enhancer_base_prompt, verse)
+                logger.info(f"Prompt (enhanced, llm): {enhanced}")
+            elif enhancer is not None and enhancement_type == "token":
+                enhanced = enhance_poem(enhancer, cfg.token_enhancer_base_prompt, verse)
+                logger.info(f"Prompt (enhanced, token): {enhanced}")
+            else:
+                enhanced = verse
+
+            base_prompt = random.choice(cfg.image_base_prompts)
+            logger.info(f"Image base prompt: {base_prompt!r}")
+            img_prompt = base_prompt + enhanced
         else:
-            img_prompt = random.choice(cfg.image_base_prompts) + state.user_prompt
+            base_prompt = random.choice(cfg.image_base_prompts)
+            logger.info(f"Image base prompt: {base_prompt!r}")
+            img_prompt = base_prompt + state.user_prompt
 
         try:
             img_bytes = generate_image_with_prompt(
@@ -1420,6 +1471,15 @@ def main() -> None:
                 model=cfg.critic_chat_model,
                 cfg=cfg,
             )
+
+        enhancer = None
+        if cfg.enhancer_chat_model and cfg.enhancer_system_prompt:
+            logger.debug("Initializing enhancer...")
+            enhancer = create_chat_character(
+                system_prompt=cfg.enhancer_system_prompt,
+                model=cfg.enhancer_chat_model,
+                cfg=cfg,
+            )
     except ValueError as e:
         print(str(e))
         logger.error(str(e))
@@ -1496,6 +1556,7 @@ def main() -> None:
             daydream_painter,
             poet,
             critic,
+            enhancer,
             moderator,
             artist_canvas,
             status_screen,

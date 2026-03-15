@@ -4,5 +4,6 @@ azure-cognitiveservices-speech
 azure-storage-blob
 pygame
 qrcode
+Pillow
 pyaudio
 requests

@@ -212,7 +212,7 @@ class StatusScreen:
         heading1_height = font.size(heading1)[1]
 
         font = pygame.font.SysFont(self._font_name, self._heading2_size)
-        heading2 = "Audio-Responsive Transformative Imagination Synthesis Technology"
+        heading2 = "Autonomous Reflective Transformative Intelligence with Sentient Tendencies"
         x_pos = int(self._surface.get_width() / 2 - font.size(heading2)[0] / 2)
         y_pos += heading1_height
         text_surface = font.render(heading2, True, pygame.Color("white"))

@@ -88,6 +88,7 @@ class ButtonConfig:
     daydream_button: int
     reveal_qr_button: int
     reveal_prompt_button: int
+    reveal_emotional_state_button: int
     shutdown_hold_button: int
     shutdown_press_button: int
 
@@ -105,6 +106,7 @@ class UserAction(Enum):
     PREVIOUS_RECENT = 6
     NEXT_RECENT = 7
     AUTO_DAYDREAM = 8
+    SHOW_EMOTIONAL_STATE = 9
 
 
 def init_display(width: int, height: int) -> pygame.Surface:
@@ -164,6 +166,8 @@ def check_for_event(
                 return UserAction.SHOW_PROMPT
             if event.key == K_q:
                 return UserAction.SHOW_QR
+            if event.key == K_m:
+                return UserAction.SHOW_EMOTIONAL_STATE
             if event.key == K_RIGHT:
                 return UserAction.NEXT_RECENT
             if event.key == K_LEFT:
@@ -180,6 +184,8 @@ def check_for_event(
                 return UserAction.SHOW_PROMPT
             if event.button == button_config.reveal_qr_button:
                 return UserAction.SHOW_QR
+            if event.button == button_config.reveal_emotional_state_button:
+                return UserAction.SHOW_EMOTIONAL_STATE
         elif js and event.type == pygame.JOYAXISMOTION:
             if event.axis == 0 and event.value < -0.5:
                 return UserAction.PREVIOUS_RECENT
@@ -357,6 +363,71 @@ def get_prompt_surface(
     return prompt_surface
 
 
+def get_emotional_state_surface(
+    emotional_state: str,
+    width: int,
+    height: int,
+    font_name: str,
+    font_size: int,
+    margin_size: int = 10,
+) -> pygame.Surface:
+    """
+    Get a surface with the current emotional state rendered on it.
+    """
+    surface = pygame.Surface((width, height))
+    surface.fill(pygame.Color("purple"))
+
+    text_surface = pygame.Surface(
+        (width - (margin_size * 2), height - (margin_size * 2))
+    )
+    text_surface.fill(pygame.Color("black"))
+
+    text_subsurface = pygame.Surface(
+        (width - (margin_size * 4), height - (margin_size * 4))
+    )
+    text_subsurface.fill(pygame.Color("black"))
+
+    header = "Current Emotional State:"
+    font = pygame.font.SysFont(font_name, font_size)
+
+    header_surface = font.render(header, True, pygame.Color("white"))
+    text_subsurface.blit(header_surface, (margin_size, margin_size))
+
+    y_pos = font.size(header)[1] * 2
+    total_height = y_pos
+
+    words = emotional_state.split()
+    line = ""
+
+    for word in words:
+        previous_line = line
+        line += word + " "
+
+        line_width = font.size(line)[0]
+        line_height = font.size(line)[1]
+
+        if line_width > width - (margin_size * 8):
+            line_surface = font.render(previous_line, True, pygame.Color("white"))
+            text_subsurface.blit(line_surface, (margin_size, y_pos))
+            line = word + " "
+            y_pos += line_height
+            total_height += line_height
+
+    if line.strip():
+        line_surface = font.render(line, True, pygame.Color("white"))
+        text_subsurface.blit(line_surface, (margin_size, y_pos))
+        total_height += font.size(line)[1]
+
+    text_surface.blit(
+        text_subsurface,
+        (margin_size, (text_subsurface.get_height() - total_height) // 2),
+    )
+
+    surface.blit(text_surface, (margin_size, margin_size))
+
+    return surface
+
+
 def show_status_screen(
     surface: pygame.Surface, text: str, status_screen_obj: StatusScreen
 ) -> None:
@@ -378,23 +449,41 @@ def update_display(
     pygame.display.update()
 
 
-def load_recents(recents_file_name: str) -> list:
+def load_recents(recents_file_name: str) -> dict:
     """
-    Load recent creations from JSON file if the file exists,
-    otherwise return an empty list.
+    Load recent creations from JSON file if the file exists.
+    Returns a dict with 'recents' and 'user_prompts' lists.
+    Handles backward compat with old plain-list format.
     """
     try:
         with open(recents_file_name, "r") as recents_file:
-            recents = json.load(recents_file)
+            data = json.load(recents_file)
     except FileNotFoundError:
-        recents = []
+        return {"recents": [], "user_prompts": [], "emotional_state": ""}
 
-    return recents
+    if isinstance(data, list):
+        return {"recents": data, "user_prompts": [], "emotional_state": ""}
+
+    return {
+        "recents": data.get("recents", []),
+        "user_prompts": data.get("user_prompts", []),
+        "emotional_state": data.get("emotional_state", ""),
+    }
 
 
-def save_recents(recents: list, recents_file_name: str) -> None:
+def save_recents(
+    recents: list, user_prompts: list, emotional_state: str, recents_file_name: str
+) -> None:
     with open(recents_file_name, "w") as recents_file:
-        json.dump(recents, recents_file, indent=4)
+        json.dump(
+            {
+                "recents": recents,
+                "user_prompts": user_prompts,
+                "emotional_state": emotional_state,
+            },
+            recents_file,
+            indent=4,
+        )
 
 
 @dataclass
@@ -475,6 +564,7 @@ class AppConfig:
     daydream_button: int
     reveal_qr_button: int
     reveal_prompt_button: int
+    reveal_emotional_state_button: int
     shutdown_hold_button: int
     shutdown_press_button: int
 
@@ -515,6 +605,11 @@ class AppConfig:
     gptimage1_quality: str | None = None
     stable_image_svc: str | None = None
     sd3_model: str | None = None
+    num_user_prompts_for_emotions: int = 5
+    enable_emotion_chip: bool = False
+    emotion_chip_chat_model: str | None = None
+    emotion_chip_system_prompt: str | None = None
+    emotion_chip_base_prompt: str | None = None
     use_stable_core_presets: bool = False
     stable_core_style_presets: list = field(default_factory=list)
     anthropic_api_key: str | None = None
@@ -533,6 +628,8 @@ class AppState:
     user_prompt: str = ""
     previous_user_prompt: str = ""
     recents: list = field(default_factory=list)
+    user_prompts: list = field(default_factory=list)
+    emotional_state: str = ""
     recent_index: int = 0
     next_change_time: float = 0.0
 
@@ -601,6 +698,7 @@ def load_config(path: str) -> AppConfig | None:
         "daydream_button",
         "reveal_qr_button",
         "reveal_prompt_button",
+        "reveal_emotional_state_button",
         "shutdown_hold_button",
         "shutdown_press_button",
         "image_base_prompts",
@@ -730,6 +828,11 @@ def load_config(path: str) -> AppConfig | None:
         recents_file_name=config["recents_file_name"],
         max_recents=config["max_recents"],
         num_recents_for_daydream=config["num_recents_for_daydream"],
+        num_user_prompts_for_emotions=config.get("num_user_prompts_for_emotions", 5),
+        enable_emotion_chip=config.get("enable_emotion_chip", False),
+        emotion_chip_chat_model=config.get("emotion_chip_chat_model"),
+        emotion_chip_system_prompt=config.get("emotion_chip_system_prompt"),
+        emotion_chip_base_prompt=config.get("emotion_chip_base_prompt"),
         min_daydream_time=config["min_daydream_time"] * 60,
         max_daydream_time=config["max_daydream_time"] * 60,
         daydream_start_hour=config["daydream_start_hour"],
@@ -741,6 +844,7 @@ def load_config(path: str) -> AppConfig | None:
         daydream_button=config["daydream_button"],
         reveal_qr_button=config["reveal_qr_button"],
         reveal_prompt_button=config["reveal_prompt_button"],
+        reveal_emotional_state_button=config["reveal_emotional_state_button"],
         shutdown_hold_button=config["shutdown_hold_button"],
         shutdown_press_button=config["shutdown_press_button"],
         welcome_words=config["welcome_words"],
@@ -864,6 +968,22 @@ def wait_for_action(
                 pygame.display.update()
 
                 # Don't return after QR has been shown since no further action is required
+        elif user_action == UserAction.SHOW_EMOTIONAL_STATE:
+            if state.emotional_state:
+                es_surface = get_emotional_state_surface(
+                    emotional_state=state.emotional_state,
+                    width=int(cfg.display_width * 0.75),
+                    height=int(cfg.display_height * 0.4),
+                    font_name=cfg.prompt_font,
+                    font_size=cfg.prompt_font_size,
+                )
+                x_pos = int((cfg.display_width - es_surface.get_width()) / 2)
+                y_pos = int((cfg.display_height - es_surface.get_height()) / 2)
+                disp_surface.blit(es_surface, (x_pos, y_pos))
+                pygame.display.update()
+                time.sleep(cfg.prompt_display_time)
+                disp_surface.blit(artist_canvas.surface, (0, 0))
+                pygame.display.update()
         elif user_action in [UserAction.PREVIOUS_RECENT, UserAction.NEXT_RECENT]:
             if state.recents:
                 if user_action == UserAction.PREVIOUS_RECENT:
@@ -963,23 +1083,34 @@ def generate_daydream_prompt(
     else:
         daydream_prompt = " something completely random."
 
+    if cfg.enable_emotion_chip and state.emotional_state:
+        full_prompt = (
+            f"Your current emotional state is {state.emotional_state}. This emotional state should influence the style, tone and content of your response. "
+            + cfg.artist_base_prompt
+            + " "
+            + daydream_prompt
+        )
+    else:
+        full_prompt = cfg.artist_base_prompt + " " + daydream_prompt
+
     logger.debug(f"Daydreaming based on: {daydream_prompt}")
     state.user_prompt = ai_artist.get_chat_response(
-        message=cfg.artist_base_prompt + " " + daydream_prompt
+        message=full_prompt
     ).content
     logger.info(f"Daydreamed: {state.user_prompt}")
 
 
-def generate_verse(cfg: AppConfig, poet, critic, state: AppState) -> str:
+def generate_verse(cfg: AppConfig, poet, critic, state: AppState, base_prompt: str | None = None) -> str:
     """
     Generate a verse using the poet, optionally with critic selection.
     """
+    effective_base_prompt = base_prompt if base_prompt is not None else cfg.verse_base_prompt
     if cfg.use_critic:
         logger.debug("Getting best verse...")
         return get_best_verse(
             poet=poet,
             critic=critic,
-            base_prompt=cfg.verse_base_prompt,
+            base_prompt=effective_base_prompt,
             user_prompt=state.user_prompt,
             num_verses=cfg.num_verses,
         )
@@ -987,7 +1118,7 @@ def generate_verse(cfg: AppConfig, poet, critic, state: AppState) -> str:
         logger.debug("Getting one verse...")
         return get_one_verse(
             poet=poet,
-            base_prompt=cfg.verse_base_prompt,
+            base_prompt=effective_base_prompt,
             user_prompt=state.user_prompt,
         )
 
@@ -1161,12 +1292,41 @@ def update_recents_and_scheduling(cfg: AppConfig, state: AppState) -> None:
     if len(state.recents) > cfg.max_recents:
         state.recents = state.recents[-cfg.max_recents :]
 
-    save_recents(state.recents, cfg.recents_file_name)
+    if not state.daydream:
+        state.user_prompts.append({"prompt": state.user_prompt})
+
+    if len(state.user_prompts) > cfg.num_user_prompts_for_emotions:
+        state.user_prompts = state.user_prompts[-cfg.num_user_prompts_for_emotions :]
+
+    save_recents(
+        state.recents, state.user_prompts, state.emotional_state, cfg.recents_file_name
+    )
     state.recent_index = len(state.recents) - 1
 
     state.next_change_time = time.monotonic() + random.randint(
         cfg.min_daydream_time, cfg.max_daydream_time
     )
+
+
+def generate_emotional_state(cfg: AppConfig, state: AppState, emotion_chip) -> None:
+    """
+    Use the emotion_chip chat character to generate an emotional state from recent
+    user prompts and save it to state.emotional_state.
+    """
+    if not state.user_prompts:
+        return
+
+    prompt_list = ", ".join(entry["prompt"] for entry in state.user_prompts)
+
+    emotion_chip.reset()
+    try:
+        state.emotional_state = emotion_chip.get_chat_response(
+            message=(cfg.emotion_chip_base_prompt or "") + " " + prompt_list
+        ).content
+        logger.info(f"Emotional state: {state.emotional_state}")
+    except Exception as e:
+        logger.error("Error generating emotional state")
+        logger.exception(e)
 
 
 def handle_creation_failure(
@@ -1198,6 +1358,7 @@ def run_creation_pipeline(
     poet,
     critic,
     enhancer,
+    emotion_chip,
     moderator: ArtistModerator,
     artist_canvas: ArtistCanvas,
     status_screen: StatusScreen,
@@ -1241,7 +1402,15 @@ def run_creation_pipeline(
     creation_failed = False
 
     if can_create:
-        verse = generate_verse(cfg, poet, critic, state)
+        if not state.daydream and cfg.enable_emotion_chip and state.emotional_state:
+            logger.info(f"Generating verse with emotional state: {state.emotional_state}")
+            verse_base_prompt = (
+                f"Your current emotional state is {state.emotional_state}. This emotional state should influence the style, tone and content of your response. "
+                + cfg.verse_base_prompt
+            )
+        else:
+            verse_base_prompt = None
+        verse = generate_verse(cfg, poet, critic, state, base_prompt=verse_base_prompt)
 
         use_poem = (state.daydream and cfg.use_poem_as_daydream_prompt) or (
             not state.daydream and cfg.use_poem_as_user_prompt
@@ -1296,6 +1465,14 @@ def run_creation_pipeline(
             screenshot_file_name = save_creation_locally(cfg, state, disp_surface)
             upload_creation_to_storage(cfg, state, storage, screenshot_file_name)
             update_recents_and_scheduling(cfg, state)
+            if emotion_chip:
+                generate_emotional_state(cfg, state, emotion_chip)
+                save_recents(
+                    state.recents,
+                    state.user_prompts,
+                    state.emotional_state,
+                    cfg.recents_file_name,
+                )
 
     if not can_create or creation_failed:
         handle_creation_failure(cfg, speech_svc, disp_surface, status_screen)
@@ -1394,6 +1571,7 @@ def main() -> None:
         daydream_button=cfg.daydream_button,
         reveal_qr_button=cfg.reveal_qr_button,
         reveal_prompt_button=cfg.reveal_prompt_button,
+        reveal_emotional_state_button=cfg.reveal_emotional_state_button,
         shutdown_hold_button=cfg.shutdown_hold_button,
         shutdown_press_button=cfg.shutdown_press_button,
     )
@@ -1480,6 +1658,24 @@ def main() -> None:
                 model=cfg.enhancer_chat_model,
                 cfg=cfg,
             )
+
+        emotion_chip = None
+        if cfg.enable_emotion_chip:
+            if (
+                not cfg.emotion_chip_system_prompt
+                or not cfg.emotion_chip_base_prompt
+                or not cfg.emotion_chip_chat_model
+            ):
+                raise ValueError(
+                    "emotion_chip_system_prompt, emotion_chip_base_prompt, and emotion_chip_chat_model "
+                    "must all be set in config when enable_emotion_chip is true."
+                )
+            logger.debug("Initializing emotion chip...")
+            emotion_chip = create_chat_character(
+                system_prompt=cfg.emotion_chip_system_prompt,
+                model=cfg.emotion_chip_chat_model,
+                cfg=cfg,
+            )
     except ValueError as e:
         print(str(e))
         logger.error(str(e))
@@ -1511,8 +1707,11 @@ def main() -> None:
     )
 
     logger.debug("Loading recent creations...")
+    recents_data = load_recents(cfg.recents_file_name)
     state = AppState(
-        recents=load_recents(cfg.recents_file_name),
+        recents=recents_data["recents"],
+        user_prompts=recents_data["user_prompts"],
+        emotional_state=recents_data["emotional_state"],
         next_change_time=time.monotonic()
         + random.randint(cfg.min_daydream_time, cfg.max_daydream_time),
     )
@@ -1557,6 +1756,7 @@ def main() -> None:
             poet,
             critic,
             enhancer,
+            emotion_chip,
             moderator,
             artist_canvas,
             status_screen,

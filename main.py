@@ -1144,31 +1144,33 @@ def generate_image_with_prompt(
     painter,
     daydream_painter,
     img_prompt: str,
+    prompt_was_enhanced: bool = False,
 ) -> bytes:
     """
     Generate image bytes using the appropriate painter and prompt. May raise on failure.
     """
-    # TODO: Improve handling of Stable Core style presets
     if state.daydream:
         if (
-            cfg.daydream_image_model == "stableimage"
+            not prompt_was_enhanced
+            and cfg.daydream_image_model == "stableimage"
             and cfg.stable_image_svc == "core"
             and cfg.use_stable_core_presets
         ):
             return daydream_painter.generate_image_data(
-                prompt=state.user_prompt,  # Use raw prompt only without base prompt
+                prompt=img_prompt,
                 core_preset=random.choice(cfg.stable_core_style_presets),
             )
         else:
             return daydream_painter.generate_image_data(prompt=img_prompt)
     else:
         if (
-            cfg.image_model == "stableimage"
+            not prompt_was_enhanced
+            and cfg.image_model == "stableimage"
             and cfg.stable_image_svc == "core"
             and cfg.use_stable_core_presets
         ):
             return painter.generate_image_data(
-                prompt=state.user_prompt,  # Use raw prompt only without base prompt
+                prompt=img_prompt,
                 core_preset=random.choice(cfg.stable_core_style_presets),
             )
         else:
@@ -1416,6 +1418,7 @@ def run_creation_pipeline(
             not state.daydream and cfg.use_poem_as_user_prompt
         )
 
+        prompt_was_enhanced = False
         if use_poem:
             enhancement_type = (
                 cfg.daydream_prompt_enhancement_type
@@ -1428,15 +1431,20 @@ def run_creation_pipeline(
             if enhancer is not None and enhancement_type == "llm":
                 enhanced = enhance_poem(enhancer, cfg.llm_enhancer_base_prompt, verse)
                 logger.info(f"Prompt (enhanced, llm): {enhanced}")
+                prompt_was_enhanced = True
             elif enhancer is not None and enhancement_type == "token":
                 enhanced = enhance_poem(enhancer, cfg.token_enhancer_base_prompt, verse)
                 logger.info(f"Prompt (enhanced, token): {enhanced}")
+                prompt_was_enhanced = True
             else:
                 enhanced = verse
 
-            base_prompt = random.choice(cfg.image_base_prompts)
-            logger.info(f"Image base prompt: {base_prompt!r}")
-            img_prompt = base_prompt + enhanced
+            if prompt_was_enhanced:
+                img_prompt = enhanced
+            else:
+                base_prompt = random.choice(cfg.image_base_prompts)
+                logger.info(f"Image base prompt: {base_prompt!r}")
+                img_prompt = base_prompt + enhanced
         else:
             base_prompt = random.choice(cfg.image_base_prompts)
             logger.info(f"Image base prompt: {base_prompt!r}")
@@ -1444,7 +1452,7 @@ def run_creation_pipeline(
 
         try:
             img_bytes = generate_image_with_prompt(
-                cfg, state, painter, daydream_painter, img_prompt
+                cfg, state, painter, daydream_painter, img_prompt, prompt_was_enhanced
             )
         except Exception as e:
             logger.error("Error generating image")

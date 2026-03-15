@@ -18,7 +18,7 @@
     "image_model": "stableimage",
     "daydream_image_model": "sdxl",
     "sdxl_steps": 30,
-    "sdxl_cfg_scale": 5.0,
+    "sdxl_cfg_scale": 7.0,
     "dalle3_quality": "standard",
     "gptimage1_quality": "medium",
     "stableimage_svc": "ultra",

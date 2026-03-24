@@ -1683,46 +1683,44 @@ def main() -> None:
         # Clear any accumulated events
         _ = pygame.event.get()
 
-        user_action = wait_for_action(
-            cfg, js, button_config, speech_svc, disp_surface, artist_canvas, state
-        )
+        try:
+            user_action = wait_for_action(
+                cfg, js, button_config, speech_svc, disp_surface, artist_canvas, state
+            )
 
-        if user_action == UserAction.QUIT:
-            logger.info("*** A.R.T.I.S.T. is shutting down. ***")
+            if user_action == UserAction.QUIT:
+                logger.info("*** A.R.T.I.S.T. is shutting down. ***")
+                pygame.quit()
+                return
 
-            # This is a workaround for crash-to-desktop issues until the code
-            # can be refactored for better error handling. A shell script should
-            # check for this file, and if it does not exist, restart the program.
-            with open("exit-requested.txt", "w") as f:
-                f.write(
-                    "This file is used to signal that the user has requested A.R.T.I.S.T. to shut down.\n"
-                )
-
-            pygame.quit()
-            return
-
-        # Return value is currently unused since creation pipeline handles all user interactions
-        # internally, but may be useful for future refactoring
-        _ = run_creation_pipeline(
-            user_action,
-            cfg,
-            speech_svc,
-            audio_recorder,
-            transcriber,
-            ai_artist,
-            painter,
-            daydream_painter,
-            poet,
-            critic,
-            visionary,
-            emotion_chip,
-            moderator,
-            artist_canvas,
-            status_screen,
-            storage,
-            disp_surface,
-            state,
-        )
+            # Return value is currently unused since creation pipeline handles all user interactions
+            # internally, but may be useful for future refactoring
+            _ = run_creation_pipeline(
+                user_action,
+                cfg,
+                speech_svc,
+                audio_recorder,
+                transcriber,
+                ai_artist,
+                painter,
+                daydream_painter,
+                poet,
+                critic,
+                visionary,
+                emotion_chip,
+                moderator,
+                artist_canvas,
+                status_screen,
+                storage,
+                disp_surface,
+                state,
+            )
+        except Exception as e:
+            logger.error("Unhandled exception in main loop — recovering")
+            logger.exception(e)
+            show_status_screen(
+                surface=disp_surface, text="Ready", status_screen_obj=status_screen
+            )
 
 
 if __name__ == "__main__":

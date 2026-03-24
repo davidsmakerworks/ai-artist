@@ -30,6 +30,7 @@
     "visionary_chat_model": "claude-sonnet-4-6",
     "emotion_chip_chat_model": "claude-sonnet-4-6",
     "enable_emotion_chip": true,
+    "emotion_drift_interval": 3,
     "user_prompt_enhancement_type": "llm",
     "daydream_prompt_enhancement_type": "clip",
     "poet_system_prompt": "You are a poet who writes short poems about various topics. You avoid the use of emojis in your poems. You avoid creating awkward grammatical constructions. Your goal is to maintain rhyme and meter, but not at the expense of standard grammar. You respond with only the poem and no other words.",

@@ -609,6 +609,7 @@ class AppConfig:
     emotion_chip_chat_model: str | None = None
     emotion_chip_system_prompt: str | None = None
     emotion_chip_base_prompt: str | None = None
+    emotion_drift_interval: int = 3
     anthropic_api_key: str | None = None
     stability_ai_api_key: str | None = None
 
@@ -629,6 +630,7 @@ class AppState:
     emotional_state: str = ""
     recent_index: int = 0
     next_change_time: float = 0.0
+    daydreams_since_user_prompt: int = 0
 
 
 def load_config(path: str) -> AppConfig | None:
@@ -828,6 +830,7 @@ def load_config(path: str) -> AppConfig | None:
         emotion_chip_chat_model=config.get("emotion_chip_chat_model"),
         emotion_chip_system_prompt=config.get("emotion_chip_system_prompt"),
         emotion_chip_base_prompt=config.get("emotion_chip_base_prompt"),
+        emotion_drift_interval=config.get("emotion_drift_interval", 3),
         min_daydream_time=config["min_daydream_time"] * 60,
         max_daydream_time=config["max_daydream_time"] * 60,
         daydream_start_hour=config["daydream_start_hour"],
@@ -1302,6 +1305,41 @@ def generate_emotional_state(cfg: AppConfig, state: AppState, emotion_chip) -> N
         logger.exception(e)
 
 
+def drift_emotional_state(cfg: AppConfig, state: AppState, emotion_chip) -> None:
+    """
+    Gently drift the emotional state based on recent daydream themes when no
+    user prompts have been received. The current emotional state is provided as
+    context so the model can evolve from it, while the base prompt still instructs
+    it to output a state description rather than a description of change.
+    """
+    recent_daydream_prompts = [
+        r["prompt"] for r in state.recents if r["daydream"]
+    ][-cfg.num_recents_for_daydream:]
+
+    if not recent_daydream_prompts:
+        return
+
+    current_state_context = (
+        f"Your current emotional state is: {state.emotional_state}. "
+        if state.emotional_state
+        else ""
+    )
+    message = (
+        current_state_context
+        + (cfg.emotion_chip_base_prompt or "")
+        + " "
+        + ", ".join(recent_daydream_prompts)
+    )
+
+    emotion_chip.reset()
+    try:
+        state.emotional_state = emotion_chip.get_chat_response(message=message).content
+        logger.info(f"Emotional state (drifted): {state.emotional_state}")
+    except Exception as e:
+        logger.error("Error drifting emotional state")
+        logger.exception(e)
+
+
 def handle_creation_failure(
     cfg: AppConfig,
     speech_svc: ArtistSpeech,
@@ -1427,13 +1465,26 @@ def run_creation_pipeline(
             upload_creation_to_storage(cfg, state, storage, screenshot_file_name)
             update_recents_and_scheduling(cfg, state)
             if emotion_chip:
-                generate_emotional_state(cfg, state, emotion_chip)
-                save_recents(
-                    state.recents,
-                    state.user_prompts,
-                    state.emotional_state,
-                    cfg.recents_file_name,
-                )
+                if not state.daydream:
+                    state.daydreams_since_user_prompt = 0
+                    generate_emotional_state(cfg, state, emotion_chip)
+                    save_recents(
+                        state.recents,
+                        state.user_prompts,
+                        state.emotional_state,
+                        cfg.recents_file_name,
+                    )
+                else:
+                    state.daydreams_since_user_prompt += 1
+                    if state.daydreams_since_user_prompt >= cfg.emotion_drift_interval:
+                        state.daydreams_since_user_prompt = 0
+                        drift_emotional_state(cfg, state, emotion_chip)
+                        save_recents(
+                            state.recents,
+                            state.user_prompts,
+                            state.emotional_state,
+                            cfg.recents_file_name,
+                        )
 
     if not can_create or creation_failed:
         handle_creation_failure(cfg, speech_svc, disp_surface, status_screen)

@@ -40,4 +40,3 @@ A Python virtual environment (venv) should be created to avoid conflicts with sy
 - Handle slow uploads to Azure Blob Storage
 - Improve handling of new OpenAI API response format
 - Allow authenticated web access to recent creations
-- Fix regression related to Stable Image Core presets (should not prepend base prompt if using Stable Image Core presets)

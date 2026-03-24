@@ -239,7 +239,7 @@ class StableImageCreator:
         self.service = service
         self.sd3_model = sd3_model
 
-    def generate_image_data(self, prompt: str, core_preset: str | None = None) -> bytes:
+    def generate_image_data(self, prompt: str) -> bytes:
         # Check this here instead of in initializer to allow for
         # dynamic model switching
         if self.service not in ["core", "ultra", "sd3"]:
@@ -258,9 +258,6 @@ class StableImageCreator:
             "aspect_ratio": "1:1",
             "output_format": "png",
         }
-
-        if self.service == "core" and core_preset:
-            data["style_preset"] = core_preset
 
         if self.sd3_model:
             data["model"] = self.sd3_model

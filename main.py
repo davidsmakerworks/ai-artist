@@ -505,12 +505,17 @@ class AppConfig:
     poet_system_prompt: str
     verse_base_prompt: str
 
+    # LLM - visionary (interprets the poem into an image prompt optimized for image models)
+    visionary_chat_model: str
+    visionary_system_prompt: str
+    llm_visionary_base_prompt: str
+    clip_visionary_base_prompt: str
+
     # Image generation
     image_model: str
     daydream_image_model: str
     img_width: int
     img_height: int
-    image_base_prompts: list
 
     # Display
     display_width: int
@@ -591,14 +596,8 @@ class AppConfig:
     use_critic: bool = False
     critic_chat_model: str | None = None
     critic_system_prompt: str | None = None
-    use_poem_as_user_prompt: bool = False
-    use_poem_as_daydream_prompt: bool = False
-    enhancer_chat_model: str | None = None
     user_prompt_enhancement_type: str | None = None
     daydream_prompt_enhancement_type: str | None = None
-    enhancer_system_prompt: str | None = None
-    llm_enhancer_base_prompt: str | None = None
-    token_enhancer_base_prompt: str | None = None
     sdxl_steps: int | None = None
     sdxl_cfg_scale: float | None = None
     dalle3_quality: str | None = None
@@ -610,8 +609,6 @@ class AppConfig:
     emotion_chip_chat_model: str | None = None
     emotion_chip_system_prompt: str | None = None
     emotion_chip_base_prompt: str | None = None
-    use_stable_core_presets: bool = False
-    stable_core_style_presets: list = field(default_factory=list)
     anthropic_api_key: str | None = None
     stability_ai_api_key: str | None = None
 
@@ -685,6 +682,10 @@ def load_config(path: str) -> AppConfig | None:
         "poet_chat_model",
         "poet_system_prompt",
         "verse_base_prompt",
+        "visionary_chat_model",
+        "visionary_system_prompt",
+        "llm_visionary_base_prompt",
+        "clip_visionary_base_prompt",
         "min_daydream_time",
         "max_daydream_time",
         "daydream_start_hour",
@@ -701,7 +702,6 @@ def load_config(path: str) -> AppConfig | None:
         "reveal_emotional_state_button",
         "shutdown_hold_button",
         "shutdown_press_button",
-        "image_base_prompts",
         "welcome_words",
         "welcome_lines",
         "daydream_lines",
@@ -781,23 +781,18 @@ def load_config(path: str) -> AppConfig | None:
         daydream_image_model=config["daydream_image_model"],
         img_width=config["img_width"],
         img_height=config["img_height"],
-        image_base_prompts=config["image_base_prompts"],
-        use_poem_as_user_prompt=config.get("use_poem_as_user_prompt", False),
-        use_poem_as_daydream_prompt=config.get("use_poem_as_daydream_prompt", False),
-        enhancer_chat_model=config.get("enhancer_chat_model"),
+        visionary_chat_model=config["visionary_chat_model"],
+        visionary_system_prompt=config["visionary_system_prompt"],
         user_prompt_enhancement_type=config.get("user_prompt_enhancement_type"),
         daydream_prompt_enhancement_type=config.get("daydream_prompt_enhancement_type"),
-        enhancer_system_prompt=config.get("enhancer_system_prompt"),
-        llm_enhancer_base_prompt=config.get("llm_enhancer_base_prompt"),
-        token_enhancer_base_prompt=config.get("token_enhancer_base_prompt"),
+        llm_visionary_base_prompt=config["llm_visionary_base_prompt"],
+        clip_visionary_base_prompt=config["clip_visionary_base_prompt"],
         sdxl_steps=config.get("sdxl_steps"),
         sdxl_cfg_scale=config.get("sdxl_cfg_scale"),
         dalle3_quality=config.get("dalle3_quality"),
         gptimage1_quality=config.get("gptimage1_quality"),
         stable_image_svc=config.get("stableimage_svc"),
         sd3_model=config.get("sd3_model"),
-        use_stable_core_presets=config.get("use_stable_core_presets", False),
-        stable_core_style_presets=config.get("stable_core_style_presets", []),
         display_width=config["display_width"],
         display_height=config["display_height"],
         horiz_margin=config["horiz_margin"],
@@ -1123,58 +1118,34 @@ def generate_verse(cfg: AppConfig, poet, critic, state: AppState, base_prompt: s
         )
 
 
-def enhance_poem(enhancer, base_prompt: str | None, verse: str) -> str:
+def build_visionary_prompt(visionary, base_prompt: str | None, verse: str) -> str:
     """
-    Enhance a poem using the enhancer character to produce an image generation prompt.
-    Falls back to the original verse if enhancement fails.
+    Use the visionary to interpret a poem into an image prompt optimized for image models.
+    Falls back to the original verse if the visionary fails.
     """
-    enhancer.reset()
+    visionary.reset()
 
     try:
-        return enhancer.get_chat_response((base_prompt or "") + verse).content
+        return visionary.get_chat_response((base_prompt or "") + verse).content
     except Exception as e:
-        logger.error("Error enhancing poem")
+        logger.error("Error building visionary prompt")
         logger.exception(e)
         return verse
 
 
 def generate_image_with_prompt(
-    cfg: AppConfig,
     state: AppState,
     painter,
     daydream_painter,
     img_prompt: str,
-    prompt_was_enhanced: bool = False,
 ) -> bytes:
     """
     Generate image bytes using the appropriate painter and prompt. May raise on failure.
     """
     if state.daydream:
-        if (
-            not prompt_was_enhanced
-            and cfg.daydream_image_model == "stableimage"
-            and cfg.stable_image_svc == "core"
-            and cfg.use_stable_core_presets
-        ):
-            return daydream_painter.generate_image_data(
-                prompt=img_prompt,
-                core_preset=random.choice(cfg.stable_core_style_presets),
-            )
-        else:
-            return daydream_painter.generate_image_data(prompt=img_prompt)
+        return daydream_painter.generate_image_data(prompt=img_prompt)
     else:
-        if (
-            not prompt_was_enhanced
-            and cfg.image_model == "stableimage"
-            and cfg.stable_image_svc == "core"
-            and cfg.use_stable_core_presets
-        ):
-            return painter.generate_image_data(
-                prompt=img_prompt,
-                core_preset=random.choice(cfg.stable_core_style_presets),
-            )
-        else:
-            return painter.generate_image_data(prompt=img_prompt)
+        return painter.generate_image_data(prompt=img_prompt)
 
 
 def render_creation_display(
@@ -1359,7 +1330,7 @@ def run_creation_pipeline(
     daydream_painter,
     poet,
     critic,
-    enhancer,
+    visionary,
     emotion_chip,
     moderator: ArtistModerator,
     artist_canvas: ArtistCanvas,
@@ -1397,7 +1368,7 @@ def run_creation_pipeline(
     state.base_file_name = get_random_string(cfg.file_name_length)
     logger.info(f"Base name: {state.base_file_name}")
 
-    img_prompt = random.choice(cfg.image_base_prompts) + state.user_prompt
+    img_prompt = state.user_prompt
     state.previous_user_prompt = state.user_prompt
 
     can_create = moderator.check_msg(msg=img_prompt)
@@ -1414,45 +1385,27 @@ def run_creation_pipeline(
             verse_base_prompt = None
         verse = generate_verse(cfg, poet, critic, state, base_prompt=verse_base_prompt)
 
-        use_poem = (state.daydream and cfg.use_poem_as_daydream_prompt) or (
-            not state.daydream and cfg.use_poem_as_user_prompt
+        enhancement_type = (
+            cfg.daydream_prompt_enhancement_type
+            if state.daydream
+            else cfg.user_prompt_enhancement_type
         )
+        verse_log = verse.replace("\n", "/")
+        logger.info(f"Poem (original): {verse_log}")
 
-        prompt_was_enhanced = False
-        if use_poem:
-            enhancement_type = (
-                cfg.daydream_prompt_enhancement_type
-                if state.daydream
-                else cfg.user_prompt_enhancement_type
-            )
-            verse_log = verse.replace("\n", "/")
-            logger.info(f"Poem (original): {verse_log}")
-
-            if enhancer is not None and enhancement_type == "llm":
-                enhanced = enhance_poem(enhancer, cfg.llm_enhancer_base_prompt, verse)
-                logger.info(f"Prompt (enhanced, llm): {enhanced}")
-                prompt_was_enhanced = True
-            elif enhancer is not None and enhancement_type == "token":
-                enhanced = enhance_poem(enhancer, cfg.token_enhancer_base_prompt, verse)
-                logger.info(f"Prompt (enhanced, token): {enhanced}")
-                prompt_was_enhanced = True
-            else:
-                enhanced = verse
-
-            if prompt_was_enhanced:
-                img_prompt = enhanced
-            else:
-                base_prompt = random.choice(cfg.image_base_prompts)
-                logger.info(f"Image base prompt: {base_prompt!r}")
-                img_prompt = base_prompt + enhanced
+        if enhancement_type == "llm":
+            img_prompt = build_visionary_prompt(visionary, cfg.llm_visionary_base_prompt, verse)
+            logger.info(f"Prompt (enhanced, llm): {img_prompt}")
+        elif enhancement_type == "clip":
+            img_prompt = build_visionary_prompt(visionary, cfg.clip_visionary_base_prompt, verse)
+            logger.info(f"Prompt (enhanced, clip): {img_prompt}")
         else:
-            base_prompt = random.choice(cfg.image_base_prompts)
-            logger.info(f"Image base prompt: {base_prompt!r}")
-            img_prompt = base_prompt + state.user_prompt
+            img_prompt = verse
+            logger.info(f"Prompt (unenhanced): {img_prompt}")
 
         try:
             img_bytes = generate_image_with_prompt(
-                cfg, state, painter, daydream_painter, img_prompt, prompt_was_enhanced
+                state, painter, daydream_painter, img_prompt
             )
         except Exception as e:
             logger.error("Error generating image")
@@ -1658,14 +1611,12 @@ def main() -> None:
                 cfg=cfg,
             )
 
-        enhancer = None
-        if cfg.enhancer_chat_model and cfg.enhancer_system_prompt:
-            logger.debug("Initializing enhancer...")
-            enhancer = create_chat_character(
-                system_prompt=cfg.enhancer_system_prompt,
-                model=cfg.enhancer_chat_model,
-                cfg=cfg,
-            )
+        logger.debug("Initializing visionary...")
+        visionary = create_chat_character(
+            system_prompt=cfg.visionary_system_prompt,
+            model=cfg.visionary_chat_model,
+            cfg=cfg,
+        )
 
         emotion_chip = None
         if cfg.enable_emotion_chip:
@@ -1763,7 +1714,7 @@ def main() -> None:
             daydream_painter,
             poet,
             critic,
-            enhancer,
+            visionary,
             emotion_chip,
             moderator,
             artist_canvas,

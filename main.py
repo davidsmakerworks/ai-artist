@@ -91,6 +91,8 @@ class ButtonConfig:
     reveal_emotional_state_button: int
     shutdown_hold_button: int
     shutdown_press_button: int
+    debug_hold_button: int
+    debug_press_button: int
 
 
 class UserAction(Enum):
@@ -107,6 +109,7 @@ class UserAction(Enum):
     NEXT_RECENT = 7
     AUTO_DAYDREAM = 8
     SHOW_EMOTIONAL_STATE = 9
+    SHOW_DEBUG_LOG = 10
 
 
 def init_display(width: int, height: int) -> pygame.Surface:
@@ -172,10 +175,15 @@ def check_for_event(
                 return UserAction.NEXT_RECENT
             if event.key == K_LEFT:
                 return UserAction.PREVIOUS_RECENT
+            if event.key == K_l:
+                return UserAction.SHOW_DEBUG_LOG
         elif js and event.type == pygame.JOYBUTTONDOWN:
             if event.button == button_config.shutdown_press_button:
                 if js.get_button(button_config.shutdown_hold_button):
                     return UserAction.QUIT
+            if event.button == button_config.debug_press_button:
+                if js.get_button(button_config.debug_hold_button):
+                    return UserAction.SHOW_DEBUG_LOG
             if event.button == button_config.generate_button:
                 return UserAction.NEW
             if event.button == button_config.daydream_button:
@@ -428,6 +436,44 @@ def get_emotional_state_surface(
     return surface
 
 
+def get_debug_log_surface(
+    log_file: str,
+    width: int,
+    height: int,
+    font_name: str,
+    font_size: int,
+    margin_size: int = 10,
+    line_spacing: int = 2,
+) -> pygame.Surface:
+    """
+    Get a surface with the last lines of the log file that fit on screen.
+    """
+    surface = pygame.Surface((width, height))
+    surface.fill(pygame.Color("black"))
+
+    font = pygame.font.SysFont(font_name, font_size)
+    line_height = font.size("A")[1] + line_spacing
+
+    usable_height = height - (margin_size * 2)
+    max_lines = usable_height // line_height
+
+    try:
+        with open(log_file, "r") as f:
+            all_lines = f.readlines()
+    except OSError:
+        all_lines = [f"Could not open {log_file}"]
+
+    lines_to_show = [l.rstrip("\n") for l in all_lines[-max_lines:]]
+
+    y_pos = margin_size
+    for line in lines_to_show:
+        line_surface = font.render(line, True, pygame.Color("white"))
+        surface.blit(line_surface, (margin_size, y_pos))
+        y_pos += line_height
+
+    return surface
+
+
 def show_status_screen(
     surface: pygame.Surface, text: str, status_screen_obj: StatusScreen
 ) -> None:
@@ -533,6 +579,9 @@ class AppConfig:
     prompt_font_size: int
     prompt_display_time: float
     qr_display_time: float
+    debug_font: str
+    debug_font_size: int
+    debug_display_time: float
 
     # Audio and speech
     input_sample_rate: int
@@ -572,6 +621,8 @@ class AppConfig:
     reveal_emotional_state_button: int
     shutdown_hold_button: int
     shutdown_press_button: int
+    debug_hold_button: int
+    debug_press_button: int
 
     # UI text / response lines
     welcome_words: list
@@ -704,6 +755,11 @@ def load_config(path: str) -> AppConfig | None:
         "reveal_emotional_state_button",
         "shutdown_hold_button",
         "shutdown_press_button",
+        "debug_hold_button",
+        "debug_press_button",
+        "debug_font",
+        "debug_font_size",
+        "debug_display_time",
         "welcome_words",
         "welcome_lines",
         "daydream_lines",
@@ -845,6 +901,11 @@ def load_config(path: str) -> AppConfig | None:
         reveal_emotional_state_button=config["reveal_emotional_state_button"],
         shutdown_hold_button=config["shutdown_hold_button"],
         shutdown_press_button=config["shutdown_press_button"],
+        debug_hold_button=config["debug_hold_button"],
+        debug_press_button=config["debug_press_button"],
+        debug_font=config["debug_font"],
+        debug_font_size=config["debug_font_size"],
+        debug_display_time=config["debug_display_time"],
         welcome_words=config["welcome_words"],
         welcome_lines=config["welcome_lines"],
         daydream_lines=config["daydream_lines"],
@@ -982,6 +1043,19 @@ def wait_for_action(
                 time.sleep(cfg.prompt_display_time)
                 disp_surface.blit(artist_canvas.surface, (0, 0))
                 pygame.display.update()
+        elif user_action == UserAction.SHOW_DEBUG_LOG:
+            debug_surface = get_debug_log_surface(
+                log_file="artist.log",
+                width=cfg.display_width,
+                height=cfg.display_height,
+                font_name=cfg.debug_font,
+                font_size=cfg.debug_font_size,
+            )
+            disp_surface.blit(debug_surface, (0, 0))
+            pygame.display.update()
+            time.sleep(cfg.debug_display_time)
+            disp_surface.blit(artist_canvas.surface, (0, 0))
+            pygame.display.update()
         elif user_action in [UserAction.PREVIOUS_RECENT, UserAction.NEXT_RECENT]:
             if state.recents:
                 if user_action == UserAction.PREVIOUS_RECENT:
@@ -1586,6 +1660,8 @@ def main() -> None:
         reveal_emotional_state_button=cfg.reveal_emotional_state_button,
         shutdown_hold_button=cfg.shutdown_hold_button,
         shutdown_press_button=cfg.shutdown_press_button,
+        debug_hold_button=cfg.debug_hold_button,
+        debug_press_button=cfg.debug_press_button,
     )
 
     random.seed()

@@ -1238,6 +1238,55 @@ def generate_image_with_prompt(
         return painter.generate_image_data(prompt=img_prompt)
 
 
+def draw_hourglass_indicator(
+    disp_surface: pygame.Surface,
+    poem_side: str,
+    display_width: int,
+    display_height: int,
+) -> None:
+    """
+    Draw a small hourglass icon in the lower corner on the poem side to signal
+    that background processing is underway and input is temporarily blocked.
+    """
+    size = 128
+    margin = 16
+    pad = 14
+
+    x = (display_width - size - margin) if poem_side == "right" else margin
+    y = display_height - size - margin
+
+    pygame.draw.rect(disp_surface, (20, 20, 20), (x, y, size, size))
+    cx = x + size // 2
+    cy = y + size // 2
+    neck_w = 5   # half-width of the waist in pixels
+    cap_h = 9    # height of the flat top/bottom caps
+    color = (220, 220, 220)
+    dark = (20, 20, 20)
+
+    # Single 6-point polygon: two cones joined by a narrow waist
+    body_top = y + pad + cap_h
+    body_bot = y + size - pad - cap_h
+    pygame.draw.polygon(disp_surface, color, [
+        (x + pad,        body_top),
+        (x + size - pad, body_top),
+        (cx + neck_w,    cy),
+        (x + size - pad, body_bot),
+        (x + pad,        body_bot),
+        (cx - neck_w,    cy),
+    ])
+
+    # Flat caps at top and bottom — make it read as a physical container
+    pygame.draw.rect(disp_surface, color, (x + pad, y + pad, size - 2 * pad, cap_h + 2))
+    pygame.draw.rect(disp_surface, color, (x + pad, y + size - pad - cap_h - 2, size - 2 * pad, cap_h + 2))
+
+    # Thin dark line separating each cap from its cone, for depth
+    pygame.draw.rect(disp_surface, dark, (x + pad, y + pad + cap_h, size - 2 * pad, 3))
+    pygame.draw.rect(disp_surface, dark, (x + pad, y + size - pad - cap_h - 3, size - 2 * pad, 3))
+
+    pygame.draw.rect(disp_surface, color, (x, y, size, size), 2)
+    pygame.display.update()
+
+
 def render_creation_display(
     cfg: AppConfig,
     state: AppState,
@@ -1247,9 +1296,10 @@ def render_creation_display(
     user_action: UserAction | None,
     artist_canvas: ArtistCanvas,
     disp_surface: pygame.Surface,
-) -> None:
+) -> str:
     """
     Load the generated image, render the verse overlay, and update the display.
+    Returns img_side ("left" or "right") so callers know which side the poem is on.
     """
     verse_lines = [line.strip() for line in verse.split("\n")]
     logger.info(f"Verse: {'/'.join(verse_lines)}")
@@ -1275,6 +1325,7 @@ def render_creation_display(
     artist_canvas.render_creation(creation, img_side)
     disp_surface.blit(artist_canvas.surface, (0, 0))
     pygame.display.update()
+    return img_side
 
 
 def save_creation_locally(
@@ -1621,7 +1672,7 @@ def run_creation_pipeline(
             creation_failed = True
 
         if not creation_failed:
-            render_creation_display(
+            img_side = render_creation_display(
                 cfg,
                 state,
                 verse,
@@ -1657,7 +1708,11 @@ def run_creation_pipeline(
                         )
 
             if raconteur:
+                poem_side = "right" if img_side == "left" else "left"
+                draw_hourglass_indicator(disp_surface, poem_side, cfg.display_width, cfg.display_height)
                 generate_speech_line_buffer(cfg, state, raconteur, speech_svc)
+                disp_surface.blit(artist_canvas.surface, (0, 0))
+                pygame.display.update()
 
     if not can_create or creation_failed:
         handle_creation_failure(cfg, state, speech_svc, disp_surface, status_screen)

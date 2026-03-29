@@ -663,6 +663,10 @@ class AppConfig:
     emotion_drift_interval: int = 3
     anthropic_api_key: str | None = None
     stability_ai_api_key: str | None = None
+    dynamic_speech_lines: bool = False
+    raconteur_chat_model: str | None = None
+    raconteur_system_prompt: str | None = None
+    raconteur_base_prompt: str | None = None
 
 
 @dataclass
@@ -682,6 +686,8 @@ class AppState:
     recent_index: int = 0
     next_change_time: float = 0.0
     daydreams_since_user_prompt: int = 0
+    speech_line_buffer: dict = field(default_factory=dict)
+    speech_line_buffer_emotional_state: str = ""
 
 
 def load_config(path: str) -> AppConfig | None:
@@ -913,6 +919,10 @@ def load_config(path: str) -> AppConfig | None:
         finished_lines=config["finished_lines"],
         failed_lines=config["failed_lines"],
         daydream_refusal_lines=config["daydream_refusal_lines"],
+        dynamic_speech_lines=config.get("dynamic_speech_lines", False),
+        raconteur_chat_model=config.get("raconteur_chat_model"),
+        raconteur_system_prompt=config.get("raconteur_system_prompt"),
+        raconteur_base_prompt=config.get("raconteur_base_prompt"),
         openai_api_key=openai_api_key,
         azure_speech_region=azure_speech_region,
         azure_speech_key=azure_speech_key,
@@ -977,7 +987,7 @@ def wait_for_action(
                 state.daydream = True
                 return UserAction.DAYDREAM
             else:
-                speech_svc.speak_text(text=random.choice(cfg.daydream_refusal_lines))
+                speak_buffered_line(cfg, state, speech_svc, "refusal", cfg.daydream_refusal_lines)
                 logger.debug("Manual daydream request refused.")
         elif user_action == UserAction.SHOW_PROMPT:
             if state.base_file_name:
@@ -1089,10 +1099,8 @@ def capture_user_audio(
     Record and transcribe user audio. Mutates state.user_prompt. Returns True if silence detected.
     """
     show_status_screen(surface=disp_surface, text=" ", status_screen_obj=status_screen)
-    greeting_phrase = (
-        random.choice(cfg.welcome_words) + " " + random.choice(cfg.welcome_lines)
-    )
-    speech_svc.speak_text(text=greeting_phrase)
+    welcome_fallbacks = [f"{w} {l}" for w in cfg.welcome_words for l in cfg.welcome_lines]
+    speak_buffered_line(cfg, state, speech_svc, "welcome", welcome_fallbacks)
     show_status_screen(
         surface=disp_surface, text="Listening...", status_screen_obj=status_screen
     )
@@ -1108,7 +1116,7 @@ def capture_user_audio(
             show_status_screen(
                 surface=disp_surface, text="Working...", status_screen_obj=status_screen
             )
-            speech_svc.speak_text(text=random.choice(cfg.working_lines))
+            speak_buffered_line(cfg, state, speech_svc, "working", cfg.working_lines)
             state.user_prompt = transcriber.transcribe(audio_stream=in_stream)
             logger.info(f"Transcribed: {state.user_prompt}")
             break
@@ -1144,7 +1152,7 @@ def generate_daydream_prompt(
 
     # Only speak line if daydream is manually initiated
     if user_action == UserAction.DAYDREAM:
-        speech_svc.speak_text(text=random.choice(cfg.daydream_lines))
+        speak_buffered_line(cfg, state, speech_svc, "daydream", cfg.daydream_lines)
 
     if len(state.recents) >= cfg.num_recents_for_daydream:
         daydream_prompt = " , ".join(
@@ -1242,10 +1250,9 @@ def render_creation_display(
     logger.info(f"Verse: {'/'.join(verse_lines)}")
 
     img_side = random.choice(["left", "right"])
-    finished_phrase = random.choice(cfg.finished_lines)
 
     if not state.daydream:
-        speech_svc.speak_text(text=finished_phrase)
+        speak_buffered_line(cfg, state, speech_svc, "finished", cfg.finished_lines)
     # Only speak prompt if daydream was manually initiated
     elif user_action == UserAction.DAYDREAM:
         speech_svc.speak_text(text=state.user_prompt, use_cache=False)
@@ -1414,8 +1421,91 @@ def drift_emotional_state(cfg: AppConfig, state: AppState, emotion_chip) -> None
         logger.exception(e)
 
 
+def generate_speech_line_buffer(
+    cfg: AppConfig,
+    state: AppState,
+    raconteur,
+    speech_svc: ArtistSpeech,
+) -> None:
+    """
+    Use the raconteur character to generate speech lines for any empty buffer
+    categories and synthesize each via TTS (no file cache).
+
+    If the emotional state has changed since the last fill, clears all existing
+    buffered lines first so stale lines are replaced. Skips categories that
+    already have lines when the emotional state is unchanged.
+    """
+    valid_categories = ["welcome", "working", "daydream", "finished", "failed", "refusal"]
+
+    emotional_state_changed = state.emotional_state != state.speech_line_buffer_emotional_state
+    if emotional_state_changed:
+        logger.info("Raconteur: emotional state changed — clearing buffer and regenerating all lines...")
+        state.speech_line_buffer.clear()
+        state.speech_line_buffer_emotional_state = state.emotional_state
+
+    categories_needing_lines = [c for c in valid_categories if not state.speech_line_buffer.get(c)]
+    if not categories_needing_lines:
+        logger.debug("Raconteur: all categories have buffered lines — skipping generation")
+        return
+
+    logger.info(f"Raconteur: generating lines for: {categories_needing_lines}...")
+
+    if cfg.enable_emotion_chip and state.emotional_state:
+        full_prompt = (
+            f"Your current emotional state is {state.emotional_state}. This emotional state should influence the style, tone and content of your response. "
+            + (cfg.raconteur_base_prompt or "")
+        )
+    else:
+        full_prompt = cfg.raconteur_base_prompt or ""
+
+    raconteur.reset()
+    try:
+        response = raconteur.get_chat_response(message=full_prompt)
+        raw = response.content
+        logger.debug(f"Raconteur raw response: {raw}")
+        lines = json.loads(raw)
+    except Exception as e:
+        logger.error("Raconteur: error generating speech lines")
+        logger.exception(e)
+        return
+
+    for category, text in lines.items():
+        if category not in valid_categories:
+            logger.warning(f"Raconteur: unexpected category '{category}' — skipping")
+            continue
+        if state.speech_line_buffer.get(category):
+            logger.debug(f"Raconteur: '{category}' already has lines — skipping")
+            continue
+        try:
+            audio_data = speech_svc.synthesize_text(text)
+            state.speech_line_buffer[category] = [audio_data]
+            logger.debug(f"Raconteur: buffered '{category}': {text}")
+        except Exception as e:
+            logger.error(f"Raconteur: error synthesizing '{category}'")
+            logger.exception(e)
+
+
+def speak_buffered_line(
+    cfg: AppConfig,
+    state: AppState,
+    speech_svc: ArtistSpeech,
+    category: str,
+    fallback: list,
+) -> None:
+    """
+    Speak a pre-synthesized line from the in-memory buffer if available;
+    otherwise fall back to speaking a random line from fallback with TTS caching.
+    """
+    if cfg.dynamic_speech_lines and state.speech_line_buffer.get(category):
+        audio_data = state.speech_line_buffer[category].pop(0)
+        speech_svc.play_audio(audio_data)
+    else:
+        speech_svc.speak_text(text=random.choice(fallback))
+
+
 def handle_creation_failure(
     cfg: AppConfig,
+    state: AppState,
     speech_svc: ArtistSpeech,
     disp_surface: pygame.Surface,
     status_screen: StatusScreen,
@@ -1428,7 +1518,7 @@ def handle_creation_failure(
         text="Creation failed!",
         status_screen_obj=status_screen,
     )
-    speech_svc.speak_text(text=random.choice(cfg.failed_lines))
+    speak_buffered_line(cfg, state, speech_svc, "failed", cfg.failed_lines)
 
 
 def run_creation_pipeline(
@@ -1444,6 +1534,7 @@ def run_creation_pipeline(
     critic,
     visionary,
     emotion_chip,
+    raconteur,
     moderator: ArtistModerator,
     artist_canvas: ArtistCanvas,
     status_screen: StatusScreen,
@@ -1560,8 +1651,13 @@ def run_creation_pipeline(
                             cfg.recents_file_name,
                         )
 
+            if raconteur:
+                generate_speech_line_buffer(cfg, state, raconteur, speech_svc)
+
     if not can_create or creation_failed:
-        handle_creation_failure(cfg, speech_svc, disp_surface, status_screen)
+        handle_creation_failure(cfg, state, speech_svc, disp_surface, status_screen)
+        if raconteur:
+            generate_speech_line_buffer(cfg, state, raconteur, speech_svc)
 
     return False
 
@@ -1762,6 +1858,24 @@ def main() -> None:
                 model=cfg.emotion_chip_chat_model,
                 cfg=cfg,
             )
+
+        raconteur = None
+        if cfg.dynamic_speech_lines:
+            if (
+                not cfg.raconteur_system_prompt
+                or not cfg.raconteur_base_prompt
+                or not cfg.raconteur_chat_model
+            ):
+                raise ValueError(
+                    "raconteur_system_prompt, raconteur_base_prompt, and raconteur_chat_model "
+                    "must all be set in config when dynamic_speech_lines is true."
+                )
+            logger.debug("Initializing raconteur...")
+            raconteur = create_chat_character(
+                system_prompt=cfg.raconteur_system_prompt,
+                model=cfg.raconteur_chat_model,
+                cfg=cfg,
+            )
     except ValueError as e:
         print(str(e))
         logger.error(str(e))
@@ -1802,6 +1916,10 @@ def main() -> None:
         + random.randint(cfg.min_daydream_time, cfg.max_daydream_time),
     )
 
+    if cfg.dynamic_speech_lines and raconteur:
+        show_status_screen(surface=disp_surface, text="Waking up...", status_screen_obj=status_screen)
+        generate_speech_line_buffer(cfg, state, raconteur, speech_svc)
+
     show_status_screen(
         surface=disp_surface, text="Ready", status_screen_obj=status_screen
     )
@@ -1835,6 +1953,7 @@ def main() -> None:
                 critic,
                 visionary,
                 emotion_chip,
+                raconteur,
                 moderator,
                 artist_canvas,
                 status_screen,

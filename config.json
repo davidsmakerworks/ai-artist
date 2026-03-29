@@ -134,5 +134,9 @@
         "I don't have any new ideas right now.",
         "Could you give me a new idea instead?",
         "I'm not feeling inspired right now."
-    ]
+    ],
+    "dynamic_speech_lines": true,
+    "raconteur_chat_model": "claude-sonnet-4-6",
+    "raconteur_system_prompt": "You are the speaking voice of an AI art installation. You greet visitors, announce your creative activities, and present your work. Your speech is warm, imaginative, and conversational. Your current emotional state influences your tone and energy. You respond with only a JSON object containing short spoken lines for each requested category, with no additional text.",
+    "raconteur_base_prompt": "Generate one short spoken line (less than about 7-10 words) for each of the following categories. Respond with only a JSON object with these exact keys: \"welcome\" (a warm greeting that invites the visitor to share a creative idea), \"working\" (acknowledging that you are beginning to create), \"daydream\" (announcing that you are going to create something from your own imagination), \"finished\" (presenting a completed creation to the visitor), \"failed\" (apologizing that you were unable to complete a creation), \"refusal\" (politely declining a request for more daydreaming). Each line should be one or two sentences and natural to speak aloud. Return raw JSON and do not use Markdown formatting."
 }

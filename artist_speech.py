@@ -153,3 +153,19 @@ class ArtistSpeech:
 
             with wave.open(wav_data, "rb") as virtual_file:
                 self._player.play(virtual_file.readframes(virtual_file.getnframes()))
+
+    def synthesize_text(self, text: str) -> bytes:
+        """
+        Synthesizes speech from the input string of text and returns the raw audio bytes.
+        Does not cache or play the audio.
+        """
+        synthesis_result = self._synthesizer.speak_ssml(self._generate_ssml(text))
+        return synthesis_result.audio_data
+
+    def play_audio(self, audio_data: bytes) -> None:
+        """
+        Plays pre-synthesized audio from raw bytes.
+        """
+        wav_data = io.BytesIO(audio_data)
+        with wave.open(wav_data, "rb") as virtual_file:
+            self._player.play(virtual_file.readframes(virtual_file.getnframes()))

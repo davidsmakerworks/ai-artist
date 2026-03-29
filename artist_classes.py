@@ -320,6 +320,9 @@ class SDXLCreator:
                 return response.content
             else:
                 raise RuntimeError("No image data returned")
+        else:
+            raise RuntimeError(f"Stable Diffusion XL model error: {str(response.json())}")
+
 
 
 class DallE2Creator:

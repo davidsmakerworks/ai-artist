@@ -154,12 +154,33 @@ class ArtistSpeech:
             with wave.open(wav_data, "rb") as virtual_file:
                 self._player.play(virtual_file.readframes(virtual_file.getnframes()))
 
+    def _wrap_ssml_fragment(self, fragment: str) -> str:
+        """
+        Wraps an inner SSML fragment (the content to place inside a voice element)
+        in the full Azure TTS document structure.
+        """
+        return (
+            f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" '
+            f'xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="{self.language}">'
+            f'<voice name="{self.voice}">{fragment}</voice>'
+            f'</speak>'
+        )
+
     def synthesize_text(self, text: str) -> bytes:
         """
         Synthesizes speech from the input string of text and returns the raw audio bytes.
         Does not cache or play the audio.
         """
         synthesis_result = self._synthesizer.speak_ssml(self._generate_ssml(text))
+        return synthesis_result.audio_data
+
+    def synthesize_ssml_fragment(self, fragment: str) -> bytes:
+        """
+        Wraps an LLM-generated SSML fragment in the Azure voice scaffolding,
+        synthesizes it, and returns raw audio bytes without caching.
+        """
+        ssml = self._wrap_ssml_fragment(fragment)
+        synthesis_result = self._synthesizer.speak_ssml(ssml)
         return synthesis_result.audio_data
 
     def play_audio(self, audio_data: bytes) -> None:

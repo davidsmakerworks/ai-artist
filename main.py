@@ -670,6 +670,7 @@ class AppConfig:
     raconteur_chat_model: str | None = None
     raconteur_system_prompt: str | None = None
     raconteur_base_prompt: str | None = None
+    raconteur_ssml_wrap_prompt: str | None = None
 
 
 @dataclass
@@ -928,6 +929,7 @@ def load_config(path: str) -> AppConfig | None:
         raconteur_chat_model=config.get("raconteur_chat_model"),
         raconteur_system_prompt=config.get("raconteur_system_prompt"),
         raconteur_base_prompt=config.get("raconteur_base_prompt"),
+        raconteur_ssml_wrap_prompt=config.get("raconteur_ssml_wrap_prompt"),
         openai_api_key=openai_api_key,
         azure_speech_region=azure_speech_region,
         azure_speech_key=azure_speech_key,
@@ -1238,6 +1240,45 @@ def generate_image_with_prompt(
         return painter.generate_image_data(prompt=img_prompt)
 
 
+def speak_ssml_wrapped(
+    cfg: AppConfig,
+    state: AppState,
+    raconteur,
+    speech_svc: ArtistSpeech,
+    text: str,
+) -> None:
+    """
+    Use the raconteur to wrap arbitrary text in expressive SSML reflecting the
+    current emotional state, then synthesize and play it. Falls back to plain
+    speak_text if raconteur is unavailable or the call fails.
+    """
+    if not cfg.dynamic_speech_lines or not raconteur or not cfg.raconteur_ssml_wrap_prompt:
+        speech_svc.speak_text(text=text, use_cache=False)
+        return
+
+    if cfg.enable_emotion_chip and state.emotional_state:
+        full_prompt = (
+            f"Your current emotional state is {state.emotional_state}. This emotional state should influence the style, tone and content of your response. "
+            + cfg.raconteur_ssml_wrap_prompt
+            + text
+        )
+    else:
+        full_prompt = cfg.raconteur_ssml_wrap_prompt + text
+
+    raconteur.reset()
+    logger.info(f"Raconteur: generating SSML wrap for daydream description...")
+    try:
+        response = raconteur.get_chat_response(message=full_prompt)
+        fragment = response.content
+        logger.debug(f"Raconteur SSML wrap raw response: {fragment}")
+        audio_data = speech_svc.synthesize_ssml_fragment(fragment)
+        speech_svc.play_audio(audio_data)
+    except Exception as e:
+        logger.error("Raconteur: error generating SSML wrap — falling back to plain speech")
+        logger.exception(e)
+        speech_svc.speak_text(text=text, use_cache=False)
+
+
 def render_creation_display(
     cfg: AppConfig,
     state: AppState,
@@ -1245,6 +1286,7 @@ def render_creation_display(
     img_bytes: bytes,
     speech_svc: ArtistSpeech,
     user_action: UserAction | None,
+    raconteur,
     artist_canvas: ArtistCanvas,
     disp_surface: pygame.Surface,
 ) -> None:
@@ -1260,7 +1302,7 @@ def render_creation_display(
         speak_buffered_line(cfg, state, speech_svc, "finished", cfg.finished_lines)
     # Only speak prompt if daydream was manually initiated
     elif user_action == UserAction.DAYDREAM:
-        speech_svc.speak_text(text=state.user_prompt, use_cache=False)
+        speak_ssml_wrapped(cfg, state, raconteur, speech_svc, state.user_prompt)
 
     # raw_image.png is a name hint to assist in file format detection, not an actual file on disk
     img = pygame.image.load(io.BytesIO(img_bytes), "raw_image.png")
@@ -1482,9 +1524,9 @@ def generate_speech_line_buffer(
             logger.debug(f"Raconteur: '{category}' already has lines — skipping")
             continue
         try:
-            audio_data = speech_svc.synthesize_text(text)
+            audio_data = speech_svc.synthesize_ssml_fragment(text)
             state.speech_line_buffer[category] = [audio_data]
-            logger.debug(f"Raconteur: buffered '{category}': {text}")
+            logger.debug(f"Raconteur: buffered '{category}' SSML: {text}")
         except Exception as e:
             logger.error(f"Raconteur: error synthesizing '{category}'")
             logger.exception(e)
@@ -1628,6 +1670,7 @@ def run_creation_pipeline(
                 img_bytes,
                 speech_svc,
                 user_action,
+                raconteur,
                 artist_canvas,
                 disp_surface,
             )

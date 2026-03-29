@@ -88,7 +88,8 @@ class ButtonConfig:
     daydream_button: int
     reveal_qr_button: int
     reveal_prompt_button: int
-    reveal_emotional_state_button: int
+    emotional_state_hold_button: int
+    emotional_state_press_button: int
     shutdown_hold_button: int
     shutdown_press_button: int
     debug_hold_button: int
@@ -192,8 +193,9 @@ def check_for_event(
                 return UserAction.SHOW_PROMPT
             if event.button == button_config.reveal_qr_button:
                 return UserAction.SHOW_QR
-            if event.button == button_config.reveal_emotional_state_button:
-                return UserAction.SHOW_EMOTIONAL_STATE
+            if event.button == button_config.emotional_state_press_button:
+                if js.get_button(button_config.emotional_state_hold_button):
+                    return UserAction.SHOW_EMOTIONAL_STATE
         elif js and event.type == pygame.JOYAXISMOTION:
             if event.axis == 0 and event.value < -0.5:
                 return UserAction.PREVIOUS_RECENT
@@ -618,7 +620,8 @@ class AppConfig:
     daydream_button: int
     reveal_qr_button: int
     reveal_prompt_button: int
-    reveal_emotional_state_button: int
+    emotional_state_hold_button: int
+    emotional_state_press_button: int
     shutdown_hold_button: int
     shutdown_press_button: int
     debug_hold_button: int
@@ -758,7 +761,8 @@ def load_config(path: str) -> AppConfig | None:
         "daydream_button",
         "reveal_qr_button",
         "reveal_prompt_button",
-        "reveal_emotional_state_button",
+        "emotional_state_hold_button",
+        "emotional_state_press_button",
         "shutdown_hold_button",
         "shutdown_press_button",
         "debug_hold_button",
@@ -904,7 +908,8 @@ def load_config(path: str) -> AppConfig | None:
         daydream_button=config["daydream_button"],
         reveal_qr_button=config["reveal_qr_button"],
         reveal_prompt_button=config["reveal_prompt_button"],
-        reveal_emotional_state_button=config["reveal_emotional_state_button"],
+        emotional_state_hold_button=config["emotional_state_hold_button"],
+        emotional_state_press_button=config["emotional_state_press_button"],
         shutdown_hold_button=config["shutdown_hold_button"],
         shutdown_press_button=config["shutdown_press_button"],
         debug_hold_button=config["debug_hold_button"],
@@ -1753,7 +1758,8 @@ def main() -> None:
         daydream_button=cfg.daydream_button,
         reveal_qr_button=cfg.reveal_qr_button,
         reveal_prompt_button=cfg.reveal_prompt_button,
-        reveal_emotional_state_button=cfg.reveal_emotional_state_button,
+        emotional_state_hold_button=cfg.emotional_state_hold_button,
+        emotional_state_press_button=cfg.emotional_state_press_button,
         shutdown_hold_button=cfg.shutdown_hold_button,
         shutdown_press_button=cfg.shutdown_press_button,
         debug_hold_button=cfg.debug_hold_button,

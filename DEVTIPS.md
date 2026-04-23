@@ -2,13 +2,17 @@
 
 ## How the Pieces Fit Together
 
-The system has a clear separation between three layers:
+The system has a clear separation between four layers:
+
+**Configuration & state** (`artist_config.py`) — `AppConfig`, `AppState`, `ButtonConfig`, `UserAction`, and `load_config()`. No pygame, no network calls. The single place to look when a config key is missing or a field type is wrong.
 
 **Service wrappers** (`openai_tools.py`, `anthropic_tools.py`, `artist_speech.py`, `artist_storage.py`, `artist_moderator.py`, `audio_tools.py`) — thin, focused classes that talk to one external API or device. These generally have no business logic.
 
-**Display / creation classes** (`artist_classes.py`) — `ArtistCanvas`, `StatusScreen`, `ArtistCreation`, and all the image-creator classes live here. Image generation (network calls) is bundled in the same file as rendering (pygame). This is worth noting if you want to reorganize.
+**Display & image generation** — split across two files:
+- `artist_classes.py` — pygame canvas and surface rendering: `ArtistCanvas`, `StatusScreen`, `ArtistCreation`, and the module-level surface functions (`get_prompt_surface`, `get_emotional_state_surface`, `get_debug_log_surface`, `draw_hourglass_indicator`, `show_status_screen`).
+- `artist_painters.py` — image generator classes that make network calls: `StableImageCreator`, `SDXLCreator`, `DallE2Creator`, `DallE3Creator`, `GptImage1Creator`. All share a `generate_image_data(prompt) -> bytes` interface.
 
-**Application logic** (`main.py`) — everything else. `AppConfig`, `AppState`, all pipeline functions, the main loop, and the two factory functions (`create_painter`, `create_chat_character`). At ~1850 lines it's the heaviest file.
+**Application logic** (`main.py`) — the creation pipeline, event loop, factory functions (`create_painter`, `create_chat_character`), and recents persistence. At ~1400 lines it's still the largest file but now focused on orchestration.
 
 The two factories are the single point where you'd add a new image model or LLM backend. Everything above them in the call stack is model-agnostic.
 
@@ -28,7 +32,7 @@ Also: `ClaudeChatCharacter` has a hardcoded `max_tokens=1024`. Very long verses 
 
 ## The Critic's Fragile Number Parser
 
-`get_best_verse()` in [main.py:276](main.py#L276) determines the winning poem by scanning the critic's response for the first digit character:
+`get_best_verse()` in [main.py:211](main.py#L211) determines the winning poem by scanning the critic's response for the first digit character:
 
 ```python
 for c in critic_verdict:
@@ -43,13 +47,13 @@ This works well when the critic responds "Poem 1 is the best choice." It breaks 
 
 ## Only Square Images Supported
 
-`load_config()` hard-rejects any config where `img_width != img_height` ([main.py:816](main.py#L816)). This affects DALL-E 3 (which supports 1792×1024 and 1024×1792) and Stable Image. The code to resize a non-square image already exists in `render_creation_display()`, so lifting this restriction is primarily a config-validation change.
+`load_config()` hard-rejects any config where `img_width != img_height` ([artist_config.py:358](artist_config.py#L358)). This affects DALL-E 3 (which supports 1792×1024 and 1024×1792) and Stable Image. The code to resize a non-square image already exists in `render_creation_display()`, so lifting this restriction is primarily a config-validation change.
 
 ---
 
 ## Multiple OpenAI Clients
 
-Each of `DallE2Creator`, `DallE3Creator`, `GptImage1Creator`, `Transcriber`, and every `ChatCharacter` instance creates its own `OpenAI()` client. On a typical run you'll have 4–6 independent clients. The README flags this as a known issue. It's harmless but wasteful — consolidating them would also simplify credential management.
+Each of `DallE2Creator`, `DallE3Creator`, `GptImage1Creator` (in `artist_painters.py`), `Transcriber`, and every `ChatCharacter` instance creates its own `OpenAI()` client. On a typical run you'll have 4–6 independent clients. The README flags this as a known issue. It's harmless but wasteful — consolidating them would also simplify credential management.
 
 ---
 
@@ -67,13 +71,13 @@ The cache key is SHA256 of `language + gender + voice + text` ([artist_speech.py
 
 ## Debug Log Path Is Hardcoded
 
-`wait_for_action()` calls `get_debug_log_surface(log_file="artist.log", ...)` ([main.py:1047](main.py#L1047)) with a literal path, not from config. If `log_config.py` is ever changed to write the log elsewhere, the on-screen debug view will silently show an error rather than failing obviously.
+`wait_for_action()` calls `get_debug_log_surface(log_file="artist.log", ...)` ([main.py:431](main.py#L431)) with a literal path, not from config. If `log_config.py` is ever changed to write the log elsewhere, the on-screen debug view will silently show an error rather than failing obviously.
 
 ---
 
 ## Recents Are Screenshot-Based
 
-When you browse recents with LEFT/RIGHT, the code loads the saved PNG screenshot from `output/` ([main.py:1071](main.py#L1071)) — the full canvas (image + verse baked together). The raw generated image is not stored separately. If you want to show the same creation at a different layout or aspect ratio later, it isn't possible from stored data.
+When you browse recents with LEFT/RIGHT, the code loads the saved PNG screenshot from `output/` ([main.py:455](main.py#L455)) — the full canvas (image + verse baked together). The raw generated image is not stored separately. If you want to show the same creation at a different layout or aspect ratio later, it isn't possible from stored data.
 
 ---
 
@@ -91,7 +95,7 @@ Emotion is injected into both the poet's base prompt and the artist's daydream p
 
 ## Daydream Rate Limiting
 
-Manual daydreams (pressing `d`) are rate-limited by a sliding window: `manual_daydream_window` seconds, `manual_daydream_limit` triggers ([main.py:973](main.py#L973)). Expired timestamps are cleaned up at the top of the `wait_for_action()` loop. Auto-daydreams are not rate-limited in the same way — they're controlled purely by the scheduled `next_change_time`.
+Manual daydreams (pressing `d`) are rate-limited by a sliding window: `manual_daydream_window` seconds, `manual_daydream_limit` triggers ([main.py:355](main.py#L355)). Expired timestamps are cleaned up at the top of the `wait_for_action()` loop. Auto-daydreams are not rate-limited in the same way — they're controlled purely by the scheduled `next_change_time`.
 
 ---
 
@@ -127,7 +131,7 @@ The current approach: if peak amplitude in a chunk is below `silence_threshold` 
 
 **SSML voice styles** — use the style/pitch/rate fields already wired up in `ArtistSpeech` to differentiate daydream speech from user-response speech.
 
-**Non-square image support** — remove the `img_width == img_height` constraint in `load_config()`, and update `ArtistCanvas.render_creation()` to lay out non-square images correctly. The resize fallback is already in place.
+**Non-square image support** — remove the `img_width == img_height` constraint in `load_config()` (`artist_config.py`), and update `ArtistCanvas.render_creation()` to lay out non-square images correctly. The resize fallback is already in place.
 
 **Configurable audio device** — PyAudio selects the system default for both input and output. Adding device index params to `AudioRecorder` and `AudioPlayer` (and exposing them in config) would help multi-sound-card setups.
 

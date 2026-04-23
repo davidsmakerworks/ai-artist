@@ -20,11 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import base64
 import logging
-import requests
 
-from openai import OpenAI
 import pygame
 
 from log_config import get_logger_name
@@ -225,193 +222,237 @@ class StatusScreen:
         self._surface.blit(text_surface, (x_pos, y_pos))
 
 
-class StableImageCreator:
-    def __init__(self, api_key: str, service: str, sd3_model: str | None = None) -> None:
-        """
-        Initialize the StableImageCreator object.
-
-        Args:
-            api_key (str): The API key for the Stability AI API.
-            service (str): The service to use for image generation.
-            sd3_model (str): The SD3 model to use for image generation if applicable
-        """
-        self.api_key = api_key
-        self.service = service
-        self.sd3_model = sd3_model
-
-    def generate_image_data(self, prompt: str) -> bytes:
-        # Check this here instead of in initializer to allow for
-        # dynamic model switching
-        if self.service not in ["core", "ultra", "sd3"]:
-            raise ValueError(f"Invalid Stable Image service specified: {self.service}")
-
-        headers = {
-            "authorization": f"Bearer {self.api_key}",
-            "accept": "image/*",
-            "stability-client-id": "A.R.T.I.S.T.",
-        }
-
-        files = {"none": ""}
-
-        data = {
-            "prompt": prompt,
-            "aspect_ratio": "1:1",
-            "output_format": "png",
-        }
-
-        if self.sd3_model:
-            data["model"] = self.sd3_model
-
-        response = requests.post(
-            f"https://api.stability.ai/v2beta/stable-image/generate/{self.service}",
-            headers=headers,
-            files=files,
-            data=data,
-        )
-
-        if response.status_code == 200:
-            return response.content
-        elif response.status_code == 403:
-            logger.error("Content filter triggered")
-            raise RuntimeError("Content filter triggered")
-        else:
-            raise RuntimeError(f"Stable Image model error: {str(response.json())}")
+def update_display(
+    display_surface: pygame.Surface, content_surface: pygame.Surface
+) -> None:
+    display_surface.blit(content_surface, (0, 0))
+    pygame.display.update()
 
 
-class SDXLCreator:
-    def __init__(
-        self,
-        api_key: str,
-        img_width: int,
-        img_height: int,
-        steps: int,
-        cfg_scale: float,
-    ) -> None:
-        self.api_key = api_key
-        self.img_width = img_width
-        self.img_height = img_height
-        self.steps = steps
-        self.cfg_scale = cfg_scale
-
-    def generate_image_data(self, prompt: str) -> bytes | None:
-        response = requests.post(
-            "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "Accept": "image/png",
-            },
-            json={
-                "text_prompts": [{"text": prompt}],
-                "width": self.img_width,
-                "height": self.img_height,
-                "steps": self.steps,
-                "cfg_scale": self.cfg_scale,
-            },
-        )
-
-        if response.status_code == 200:
-            if response.headers["Finish-Reason"] == "CONTENT_FILTERED":
-                logger.error("Content filter triggered")
-                raise RuntimeError("Content filter triggered")
-            elif response.headers["Finish-Reason"] == "ERROR":
-                raise RuntimeError("Error generating image")
-            elif response.headers["Content-Type"] == "image/png":
-                return response.content
-            else:
-                raise RuntimeError("No image data returned")
-        else:
-            raise RuntimeError(f"Stable Diffusion XL model error: {str(response.json())}")
+def show_status_screen(
+    surface: pygame.Surface, text: str, status_screen_obj: StatusScreen
+) -> None:
+    status_screen_obj.render_status(text)
+    update_display(surface, status_screen_obj.surface)
 
 
+def get_prompt_surface(
+    prompt: str,
+    prompt_source: str,
+    width: int,
+    height: int,
+    font_name: str,
+    font_size: int,
+    margin_size: int = 10,
+) -> pygame.Surface:
+    prompt_surface = pygame.Surface((width, height))
+    prompt_surface.fill(pygame.Color("yellow"))
 
-class DallE2Creator:
-    def __init__(self, api_key: str, img_width: int, img_height: int) -> None:
-        self.api_key = api_key
-        self.img_width = img_width
-        self.img_height = img_height
+    text_surface = pygame.Surface(
+        (width - (margin_size * 2), height - (margin_size * 2))
+    )
+    text_surface.fill(pygame.Color("black"))
 
-        self._openai_client = OpenAI()
-        self._openai_client.api_key = api_key
+    text_subsurface = pygame.Surface(
+        (width - (margin_size * 4), height - (margin_size * 4))
+    )
+    text_subsurface.fill(pygame.Color("black"))
 
-    def generate_image_data(self, prompt: str) -> bytes:
-        img_size = f"{self.img_width}x{self.img_height}"
+    prompt = "Prompt: " + prompt
+    prompt_source = "Source: " + prompt_source
 
-        try:
-            response = self._openai_client.images.generate(
-                model="dall-e-2",
-                prompt=prompt,
-                size=img_size,
-                response_format="b64_json",
-                user="A.R.T.I.S.T.",
-            )
-        except Exception as e:
-            logger.error(f"Image creation response: {response}")
-            logger.exception(e)
-            raise
+    font = pygame.font.SysFont(font_name, font_size)
 
-        return base64.b64decode(response.data[0].b64_json)
+    prompt_words = prompt.split()
+
+    line = ""
+    y_pos = 0
+
+    total_height = 0
+
+    for word in prompt_words:
+        previous_line = line
+        line += word + " "
+
+        line_width = font.size(line)[0]
+        line_height = font.size(line)[1]
+
+        if line_width > width - (margin_size * 8):
+            line_surface = font.render(previous_line, True, pygame.Color("white"))
+            logger.debug(f"Rendering word-wrapped prompt line: {previous_line}")
+            text_subsurface.blit(line_surface, (margin_size, y_pos))
+
+            line = word + " "
+            y_pos += line_height
+            total_height += line_height
+
+    # Render any remaining words
+    if line.strip():
+        line_surface = font.render(line, True, pygame.Color("white"))
+        logger.debug(f"Rendering prompt line: {line}")
+        text_subsurface.blit(line_surface, (margin_size, y_pos))
+        total_height += line_height
+
+    # Leave blank line before prompt source
+    y_pos += line_height * 2
+    total_height += line_height
+
+    line_surface = font.render(prompt_source, True, pygame.Color("white"))
+    total_height += line_height
+    logger.debug(f"Rendering prompt source line: {prompt_source}")
+    text_subsurface.blit(line_surface, (margin_size, y_pos))
+
+    text_surface.blit(
+        text_subsurface,
+        (margin_size, (text_subsurface.get_height() - total_height) // 2),
+    )
+
+    prompt_surface.blit(text_surface, (margin_size, margin_size))
+
+    return prompt_surface
 
 
-class DallE3Creator:
-    def __init__(
-        self, api_key: str, img_width: int, img_height: int, quality: str = "standard"
-    ) -> None:
-        self.api_key = api_key
-        self.img_width = img_width
-        self.img_height = img_height
-        self.quality = quality
+def get_emotional_state_surface(
+    emotional_state: str,
+    width: int,
+    height: int,
+    font_name: str,
+    font_size: int,
+    margin_size: int = 10,
+) -> pygame.Surface:
+    surface = pygame.Surface((width, height))
+    surface.fill(pygame.Color("purple"))
 
-        self._openai_client = OpenAI()
-        self._openai_client.api_key = api_key
+    text_surface = pygame.Surface(
+        (width - (margin_size * 2), height - (margin_size * 2))
+    )
+    text_surface.fill(pygame.Color("black"))
 
-    def generate_image_data(self, prompt: str) -> bytes:
-        img_size = f"{self.img_width}x{self.img_height}"
+    text_subsurface = pygame.Surface(
+        (width - (margin_size * 4), height - (margin_size * 4))
+    )
+    text_subsurface.fill(pygame.Color("black"))
 
-        try:
-            response = self._openai_client.images.generate(
-                model="dall-e-3",
-                prompt=prompt,
-                size=img_size,
-                quality=self.quality,
-                response_format="b64_json",
-                user="A.R.T.I.S.T.",
-            )
-        except Exception as e:
-            logger.error(f"Image creation response: {response}")
-            logger.exception(e)
-            raise
+    header = "Current Emotional State:"
+    font = pygame.font.SysFont(font_name, font_size)
 
-        return base64.b64decode(response.data[0].b64_json)
+    header_surface = font.render(header, True, pygame.Color("white"))
+    text_subsurface.blit(header_surface, (margin_size, margin_size))
+
+    y_pos = font.size(header)[1] * 2
+    total_height = y_pos
+
+    words = emotional_state.split()
+    line = ""
+
+    for word in words:
+        previous_line = line
+        line += word + " "
+
+        line_width = font.size(line)[0]
+        line_height = font.size(line)[1]
+
+        if line_width > width - (margin_size * 8):
+            line_surface = font.render(previous_line, True, pygame.Color("white"))
+            text_subsurface.blit(line_surface, (margin_size, y_pos))
+            line = word + " "
+            y_pos += line_height
+            total_height += line_height
+
+    if line.strip():
+        line_surface = font.render(line, True, pygame.Color("white"))
+        text_subsurface.blit(line_surface, (margin_size, y_pos))
+        total_height += font.size(line)[1]
+
+    text_surface.blit(
+        text_subsurface,
+        (margin_size, (text_subsurface.get_height() - total_height) // 2),
+    )
+
+    surface.blit(text_surface, (margin_size, margin_size))
+
+    return surface
 
 
-class GptImage1Creator:
-    def __init__(
-        self, api_key: str, img_width: int, img_height: int, quality: str = "medium"
-    ) -> None:
-        self.api_key = api_key
-        self.img_width = img_width
-        self.img_height = img_height
-        self.quality = quality
+def get_debug_log_surface(
+    log_file: str,
+    width: int,
+    height: int,
+    font_name: str,
+    font_size: int,
+    margin_size: int = 10,
+    line_spacing: int = 2,
+) -> pygame.Surface:
+    surface = pygame.Surface((width, height))
+    surface.fill(pygame.Color("black"))
 
-        self._openai_client = OpenAI()
-        self._openai_client.api_key = api_key
+    font = pygame.font.SysFont(font_name, font_size)
+    line_height = font.size("A")[1] + line_spacing
 
-    def generate_image_data(self, prompt: str) -> bytes:
-        img_size = f"{self.img_width}x{self.img_height}"
+    usable_height = height - (margin_size * 2)
+    max_lines = usable_height // line_height
 
-        try:
-            response = self._openai_client.images.generate(
-                model="gpt-image-1",
-                prompt=prompt,
-                size=img_size,
-                quality=self.quality,
-                background="opaque",
-                user="A.R.T.I.S.T.",
-            )
-        except Exception as e:
-            logger.error(f"Image creation response: {response}")
-            logger.exception(e)
-            raise
+    try:
+        with open(log_file, "r") as f:
+            all_lines = f.readlines()
+    except OSError:
+        all_lines = [f"Could not open {log_file}"]
 
-        return base64.b64decode(response.data[0].b64_json)
+    lines_to_show = [l.rstrip("\n") for l in all_lines[-max_lines:]]
+
+    y_pos = margin_size
+    for line in lines_to_show:
+        line_surface = font.render(line, True, pygame.Color("white"))
+        surface.blit(line_surface, (margin_size, y_pos))
+        y_pos += line_height
+
+    return surface
+
+
+def draw_hourglass_indicator(
+    disp_surface: pygame.Surface,
+    poem_side: str,
+    display_width: int,
+    display_height: int,
+) -> None:
+    """
+    Draw a small hourglass icon in the lower corner on the poem side to signal
+    that background processing is underway and input is temporarily blocked.
+    """
+    size = 128
+    margin = 16
+    pad = 14
+
+    x = (display_width - size - margin) if poem_side == "right" else margin
+    y = display_height - size - margin
+
+    pygame.draw.rect(disp_surface, (20, 20, 20), (x, y, size, size))
+    cx = x + size // 2
+    cy = y + size // 2
+    neck_w = 5   # half-width of the waist in pixels
+    cap_h = 9    # height of the flat top/bottom caps
+    color = (220, 220, 220)
+    dark = (20, 20, 20)
+
+    # Single 6-point polygon: two cones joined by a narrow waist
+    body_top = y + pad + cap_h
+    body_bot = y + size - pad - cap_h
+    pygame.draw.polygon(disp_surface, color, [
+        (x + pad,        body_top),
+        (x + size - pad, body_top),
+        (cx + neck_w,    cy),
+        (x + size - pad, body_bot),
+        (x + pad,        body_bot),
+        (cx - neck_w,    cy),
+    ])
+
+    # Flat caps at top and bottom — make it read as a physical container
+    pygame.draw.rect(disp_surface, color, (x + pad, y + pad, size - 2 * pad, cap_h + 2))
+    pygame.draw.rect(disp_surface, color, (x + pad, y + size - pad - cap_h - 2, size - 2 * pad, cap_h + 2))
+
+    # Thin dark line separating each cap from its cone, for depth
+    pygame.draw.rect(disp_surface, dark, (x + pad, y + pad + cap_h, size - 2 * pad, 3))
+    pygame.draw.rect(disp_surface, dark, (x + pad, y + size - pad - cap_h - 3, size - 2 * pad, 3))
+
+    pygame.draw.rect(disp_surface, color, (x, y, size, size), 2)
+    pygame.display.update()

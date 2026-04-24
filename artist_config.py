@@ -202,6 +202,10 @@ class AppConfig:
     raconteur_chat_model: str | None = None
     raconteur_system_prompt: str | None = None
     raconteur_base_prompt: str | None = None
+    enable_daydream_topics: bool = True
+    archivist_chat_model: str = "claude-haiku-4-5"
+    archivist_system_prompt: str = ""
+    daydream_topic_repeat_limit: int = 3
 
 
 @dataclass
@@ -223,6 +227,7 @@ class AppState:
     daydreams_since_user_prompt: int = 0
     speech_line_buffer: dict = field(default_factory=dict)
     speech_line_buffer_emotional_state: str = ""
+    pending_daydream_topics: dict | None = None
 
 
 def load_config(path: str) -> AppConfig | None:
@@ -460,6 +465,10 @@ def load_config(path: str) -> AppConfig | None:
         raconteur_chat_model=config.get("raconteur_chat_model"),
         raconteur_system_prompt=config.get("raconteur_system_prompt"),
         raconteur_base_prompt=config.get("raconteur_base_prompt"),
+        enable_daydream_topics=config.get("enable_daydream_topics", True),
+        archivist_chat_model=config.get("archivist_chat_model", "claude-haiku-4-5"),
+        archivist_system_prompt=config.get("archivist_system_prompt", ""),
+        daydream_topic_repeat_limit=config.get("daydream_topic_repeat_limit", 3),
         openai_api_key=openai_api_key,
         azure_speech_region=azure_speech_region,
         azure_speech_key=azure_speech_key,

@@ -136,6 +136,10 @@
         "Could you give me a new idea instead?",
         "I'm not feeling inspired right now."
     ],
+    "enable_daydream_topics": true,
+    "archivist_chat_model": "claude-haiku-4-5",
+    "archivist_system_prompt": "You extract the main subject and setting from a creative writing prompt. Respond with only a JSON object with two keys: \"subjects\" (an array of 1-2 specific lowercase singular nouns for the main subject, no adjectives) and \"settings\" (an array of 1-2 specific lowercase singular nouns for the setting or location, no adjectives). Return raw JSON and do not use Markdown formatting.",
+    "daydream_topic_repeat_limit": 3,
     "dynamic_speech_lines": true,
     "raconteur_chat_model": "claude-sonnet-4-6",
     "raconteur_system_prompt": "You are the speaking voice of an AI art installation. You greet visitors, announce your creative activities, and present your work. Your speech is warm, imaginative, and conversational. Your current emotional state influences your tone and energy. You respond with only a JSON object containing short spoken lines for each requested category, with no additional text.",

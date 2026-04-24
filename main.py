@@ -507,10 +507,57 @@ def capture_user_audio(
     return False
 
 
+def get_overused_topics(recents: list, repeat_limit: int) -> list[str]:
+    """
+    Return topics that appear >= repeat_limit times across daydream entries in recents.
+    """
+    counts: dict[str, int] = {}
+    for entry in recents:
+        if not entry.get("daydream"):
+            continue
+        topics = entry.get("topics")
+        if not topics:
+            continue
+        for topic in topics.get("subjects", []) + topics.get("settings", []):
+            key = topic.lower()
+            counts[key] = counts.get(key, 0) + 1
+    return [topic for topic, count in counts.items() if count >= repeat_limit]
+
+
+def extract_daydream_topics(prompt: str, archivist) -> dict | None:
+    """
+    Use an LLM to extract subjects and settings from a daydream prompt.
+    Returns {"subjects": [...], "settings": [...]} or None on failure.
+    """
+    archivist.reset()
+    try:
+        response = archivist.get_chat_response(message=prompt)
+        raw = response.content.strip()
+        logger.debug(f"Raw topic extraction response: {raw}")
+        # Strip markdown code fences if present (e.g. ```json ... ```)
+        if raw.startswith("```"):
+            raw = raw.split("```", 2)[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        topics = json.loads(raw)
+        if isinstance(topics.get("subjects"), list) and isinstance(
+            topics.get("settings"), list
+        ):
+            return topics
+        logger.warning(f"Unexpected topic extraction response format: {topics}")
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse topic extraction response as JSON: {e}")
+    except Exception as e:
+        logger.warning(f"Topic extraction failed: {e}")
+    return None
+
+
 def generate_daydream_prompt(
     cfg: AppConfig,
     state: AppState,
     ai_artist,
+    archivist,
     speech_svc: ArtistSpeech,
     user_action: UserAction | None,
     disp_surface: pygame.Surface,
@@ -547,11 +594,30 @@ def generate_daydream_prompt(
     else:
         full_prompt = cfg.artist_base_prompt + " " + daydream_prompt
 
+    if cfg.enable_daydream_topics:
+        overused = get_overused_topics(state.recents, cfg.daydream_topic_repeat_limit)
+        if overused:
+            logger.info(f"Excluding overused daydream topics: {', '.join(overused)}")
+            full_prompt += f" Avoid using these overused subjects and settings: {', '.join(overused)}."
+        else:
+            logger.debug("No overused daydream topics to exclude")
+
     logger.debug(f"Daydreaming based on: {daydream_prompt}")
-    state.user_prompt = ai_artist.get_chat_response(
-        message=full_prompt
-    ).content
+    state.user_prompt = ai_artist.get_chat_response(message=full_prompt).content
     logger.info(f"Daydreamed: {state.user_prompt}")
+
+    state.pending_daydream_topics = None
+    if cfg.enable_daydream_topics and archivist is not None:
+        state.pending_daydream_topics = extract_daydream_topics(
+            state.user_prompt, archivist
+        )
+        if state.pending_daydream_topics:
+            logger.info(
+                f"Extracted daydream topics — subjects: {state.pending_daydream_topics.get('subjects', [])}, "
+                f"settings: {state.pending_daydream_topics.get('settings', [])}"
+            )
+        else:
+            logger.debug("Topic extraction returned no results")
 
 
 def generate_verse(cfg: AppConfig, poet, critic, state: AppState, base_prompt: str | None = None) -> str:
@@ -763,13 +829,16 @@ def update_recents_and_scheduling(cfg: AppConfig, state: AppState) -> None:
     Append the current creation to the recents list and schedule the next auto-daydream.
     """
     logger.debug("Updating recent creations...")
-    state.recents.append(
-        {
-            "base_name": state.base_file_name,
-            "prompt": state.user_prompt,
-            "daydream": state.daydream,
-        }
-    )
+    entry = {
+        "base_name": state.base_file_name,
+        "prompt": state.user_prompt,
+        "daydream": state.daydream,
+    }
+    if state.daydream and state.pending_daydream_topics:
+        entry["topics"] = state.pending_daydream_topics
+        logger.debug(f"Saving daydream topics to recents: {state.pending_daydream_topics}")
+    state.pending_daydream_topics = None
+    state.recents.append(entry)
 
     if len(state.recents) > cfg.max_recents:
         state.recents = state.recents[-cfg.max_recents :]
@@ -953,6 +1022,7 @@ def run_creation_pipeline(
     audio_recorder: AudioRecorder,
     transcriber: Transcriber,
     ai_artist,
+    archivist,
     painter,
     daydream_painter,
     poet,
@@ -990,7 +1060,7 @@ def run_creation_pipeline(
     else:
         logger.info("=== Starting daydream ===")
         generate_daydream_prompt(
-            cfg, state, ai_artist, speech_svc, user_action, disp_surface, status_screen
+            cfg, state, ai_artist, archivist, speech_svc, user_action, disp_surface, status_screen
         )
 
     state.base_file_name = get_random_string(cfg.file_name_length)
@@ -1306,6 +1376,20 @@ def main() -> None:
                 model=cfg.raconteur_chat_model,
                 cfg=cfg,
             )
+
+        archivist = None
+        if cfg.enable_daydream_topics:
+            if not cfg.archivist_system_prompt or not cfg.archivist_chat_model:
+                raise ValueError(
+                    "archivist_system_prompt and archivist_chat_model "
+                    "must both be set in config when enable_daydream_topics is true."
+                )
+            logger.debug("Initializing archivist...")
+            archivist = create_chat_character(
+                system_prompt=cfg.archivist_system_prompt,
+                model=cfg.archivist_chat_model,
+                cfg=cfg,
+            )
     except ValueError as e:
         print(str(e))
         logger.error(str(e))
@@ -1377,6 +1461,7 @@ def main() -> None:
                 audio_recorder,
                 transcriber,
                 ai_artist,
+                archivist,
                 painter,
                 daydream_painter,
                 poet,

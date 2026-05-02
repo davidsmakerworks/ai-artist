@@ -5,8 +5,7 @@ received for some time, autonomously generates a new creation inspired by the
 previous scene.
 
 ## Technologies used
-- OpenAI DALL-E 2, OpenAI DALL-E 3, Stability AI SDXL or Stability AI Stable 
-Image to generate images
+- OpenAI GPT Image 1, Stability AI SDXL or Stability AI Stable Image to generate images
 - OpenAI GPT Chat Completion or Anthropic Claude to generate verses and
 daydream image prompts, and to choose the best verse from multiple options if
 the critic is enabled.

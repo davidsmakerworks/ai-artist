@@ -130,66 +130,6 @@ class SDXLCreator:
             raise RuntimeError(f"Stable Diffusion XL model error: {str(response.json())}")
 
 
-class DallE2Creator:
-    def __init__(self, api_key: str, img_width: int, img_height: int) -> None:
-        self.api_key = api_key
-        self.img_width = img_width
-        self.img_height = img_height
-
-        self._openai_client = OpenAI()
-        self._openai_client.api_key = api_key
-
-    def generate_image_data(self, prompt: str) -> bytes:
-        img_size = f"{self.img_width}x{self.img_height}"
-
-        try:
-            response = self._openai_client.images.generate(
-                model="dall-e-2",
-                prompt=prompt,
-                size=img_size,
-                response_format="b64_json",
-                user="A.R.T.I.S.T.",
-            )
-        except Exception as e:
-            logger.error(f"Image creation response: {response}")
-            logger.exception(e)
-            raise
-
-        return base64.b64decode(response.data[0].b64_json)
-
-
-class DallE3Creator:
-    def __init__(
-        self, api_key: str, img_width: int, img_height: int, quality: str = "standard"
-    ) -> None:
-        self.api_key = api_key
-        self.img_width = img_width
-        self.img_height = img_height
-        self.quality = quality
-
-        self._openai_client = OpenAI()
-        self._openai_client.api_key = api_key
-
-    def generate_image_data(self, prompt: str) -> bytes:
-        img_size = f"{self.img_width}x{self.img_height}"
-
-        try:
-            response = self._openai_client.images.generate(
-                model="dall-e-3",
-                prompt=prompt,
-                size=img_size,
-                quality=self.quality,
-                response_format="b64_json",
-                user="A.R.T.I.S.T.",
-            )
-        except Exception as e:
-            logger.error(f"Image creation response: {response}")
-            logger.exception(e)
-            raise
-
-        return base64.b64decode(response.data[0].b64_json)
-
-
 class GptImage1Creator:
     def __init__(
         self, api_key: str, img_width: int, img_height: int, quality: str = "medium"

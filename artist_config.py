@@ -186,7 +186,6 @@ class AppConfig:
     daydream_prompt_enhancement_type: str | None = None
     sdxl_steps: int | None = None
     sdxl_cfg_scale: float | None = None
-    dalle3_quality: str | None = None
     gptimage1_quality: str | None = None
     stable_image_svc: str | None = None
     sd3_model: str | None = None
@@ -394,7 +393,6 @@ def load_config(path: str) -> AppConfig | None:
         clip_visionary_base_prompt=config["clip_visionary_base_prompt"],
         sdxl_steps=config.get("sdxl_steps"),
         sdxl_cfg_scale=config.get("sdxl_cfg_scale"),
-        dalle3_quality=config.get("dalle3_quality"),
         gptimage1_quality=config.get("gptimage1_quality"),
         stable_image_svc=config.get("stableimage_svc"),
         sd3_model=config.get("sd3_model"),

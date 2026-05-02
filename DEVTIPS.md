@@ -10,7 +10,7 @@ The system has a clear separation between four layers:
 
 **Display & image generation** — split across two files:
 - `artist_classes.py` — pygame canvas and surface rendering: `ArtistCanvas`, `StatusScreen`, `ArtistCreation`, and the module-level surface functions (`get_prompt_surface`, `get_emotional_state_surface`, `get_debug_log_surface`, `draw_hourglass_indicator`, `show_status_screen`).
-- `artist_painters.py` — image generator classes that make network calls: `StableImageCreator`, `SDXLCreator`, `DallE2Creator`, `DallE3Creator`, `GptImage1Creator`. All share a `generate_image_data(prompt) -> bytes` interface.
+- `artist_painters.py` — image generator classes that make network calls: `StableImageCreator`, `SDXLCreator`, `GptImage1Creator`. All share a `generate_image_data(prompt) -> bytes` interface.
 
 **Application logic** (`main.py`) — the creation pipeline, event loop, factory functions (`create_painter`, `create_chat_character`), and recents persistence. At ~1400 lines it's still the largest file but now focused on orchestration.
 
@@ -47,13 +47,13 @@ This works well when the critic responds "Poem 1 is the best choice." It breaks 
 
 ## Only Square Images Supported
 
-`load_config()` hard-rejects any config where `img_width != img_height` ([artist_config.py:358](artist_config.py#L358)). This affects DALL-E 3 (which supports 1792×1024 and 1024×1792) and Stable Image. The code to resize a non-square image already exists in `render_creation_display()`, so lifting this restriction is primarily a config-validation change.
+`load_config()` hard-rejects any config where `img_width != img_height` ([artist_config.py:358](artist_config.py#L358)). This affects Stable Image and GPT Image 1 (which support non-square sizes). The code to resize a non-square image already exists in `render_creation_display()`, so lifting this restriction is primarily a config-validation change.
 
 ---
 
 ## Multiple OpenAI Clients
 
-Each of `DallE2Creator`, `DallE3Creator`, `GptImage1Creator` (in `artist_painters.py`), `Transcriber`, and every `ChatCharacter` instance creates its own `OpenAI()` client. On a typical run you'll have 4–6 independent clients. The README flags this as a known issue. It's harmless but wasteful — consolidating them would also simplify credential management.
+`GptImage1Creator` (in `artist_painters.py`), `Transcriber`, and every `ChatCharacter` instance each creates its own `OpenAI()` client. On a typical run you'll have 3–5 independent clients. The README flags this as a known issue. It's harmless but wasteful — consolidating them would also simplify credential management.
 
 ---
 

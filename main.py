@@ -25,7 +25,7 @@ A.R.T.I.S.T. - Audio-Responsive Transformative Imagination Synthesis Technology
 
 Generates images and verses of poetry based on user voice input.
 
-Uses OpenAI DALL-E 2/DALL-E 3 or Stability AI SDXL/Stable Image to generate images.
+Uses OpenAI GPT Image 1 or Stability AI SDXL/Stable Image to generate images.
 
 Uses OpenAI GPT Chat Completion or Anthropic Claude to generate verses and
 daydream image prompts, and to choose the best verse from multiple options if
@@ -65,8 +65,6 @@ from artist_classes import (
 )
 from artist_config import AppConfig, AppState, ButtonConfig, UserAction, load_config
 from artist_painters import (
-    DallE2Creator,
-    DallE3Creator,
     GptImage1Creator,
     SDXLCreator,
     StableImageCreator,
@@ -302,9 +300,7 @@ def save_recents(
             recents_file,
             indent=4,
         )
-
-
-
+        
 
 def wait_for_action(
     cfg: AppConfig,
@@ -1172,19 +1168,6 @@ def create_painter(model: str, cfg: AppConfig):
             img_height=cfg.img_height,
             steps=cfg.sdxl_steps,
             cfg_scale=cfg.sdxl_cfg_scale,
-        )
-    elif model == "dalle2":
-        return DallE2Creator(
-            api_key=cfg.openai_api_key,
-            img_width=cfg.img_width,
-            img_height=cfg.img_height,
-        )
-    elif model == "dalle3":
-        return DallE3Creator(
-            api_key=cfg.openai_api_key,
-            img_width=cfg.img_width,
-            img_height=cfg.img_height,
-            quality=cfg.dalle3_quality,
         )
     elif model == "gpt-image-1":
         return GptImage1Creator(

@@ -59,7 +59,7 @@ This works well when the critic responds "Poem 1 is the best choice." It breaks 
 
 ## Only Square Images Supported
 
-`load_config()` hard-rejects any config where `img_width != img_height` ([artist_config.py:358](artist_config.py#L358)). This affects Stable Image and GPT Image 1 (which support non-square sizes). The code to resize a non-square image already exists in `render_creation_display()`, so lifting this restriction is primarily a config-validation change.
+`load_config()` hard-rejects any config where `img_width != img_height` ([artist_config.py:360](artist_config.py#L360)). This affects Stable Image and GPT Image 1 (which support non-square sizes). The code to resize a non-square image already exists in `render_creation_display()`, so lifting this restriction is primarily a config-validation change.
 
 ---
 

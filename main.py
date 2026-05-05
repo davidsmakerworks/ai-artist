@@ -48,6 +48,8 @@ import random
 import string
 import time
 
+from dotenv import load_dotenv
+
 import pygame
 import qrcode
 
@@ -1222,7 +1224,17 @@ def main() -> None:
     parser.add_argument(
         "--config", default="config.json", help="Path to configuration file"
     )
+    parser.add_argument(
+        "--env-file", default=None, help="Path to .env file for environment variables"
+    )
     args = parser.parse_args()
+
+    if args.env_file:
+        load_dotenv(dotenv_path=args.env_file, override=True)
+    else:
+        default_env = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+        if os.path.isfile(default_env):
+            load_dotenv(dotenv_path=default_env, override=True)
 
     cfg = load_config(args.config)
     if cfg is None:

@@ -338,12 +338,10 @@ def load_config(path: str) -> AppConfig | None:
 
     anthropic_api_key = None
     if config["chat_service"] == "anthropic":
-        anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get(
-            "CLAUDE_API_KEY"
-        )
+        anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
         if anthropic_api_key is None:
             print(
-                "Please set ANTHROPIC_API_KEY or CLAUDE_API_KEY environment variable for Anthropic API key."
+                "Please set ANTHROPIC_API_KEY environment variable for Anthropic API key."
             )
             return None
 

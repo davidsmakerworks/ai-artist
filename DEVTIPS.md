@@ -18,6 +18,18 @@ The two factories are the single point where you'd add a new image model or LLM 
 
 ---
 
+## Environment Variable Loading
+
+API keys and other secrets are read from the environment. On startup, `main()` resolves which source to use, in priority order:
+
+1. **`--env-file <path>`** — loads the specified file via `python-dotenv` with `override=True`, replacing any already-set variables.
+2. **`.env` in the same directory as `main.py`** — loaded automatically if present and `--env-file` is not given.
+3. **Existing shell environment** — used as-is when neither of the above applies.
+
+`override=True` means the file always wins over the shell environment, which makes behavior predictable when both exist. If you want the shell to take precedence, you'd need to drop the override flag.
+
+---
+
 ## The OpenAI vs. Anthropic Character Difference
 
 This is the most subtle behavioral split in the codebase.

@@ -7,3 +7,4 @@ qrcode
 Pillow
 pyaudio
 requests
+python-dotenv

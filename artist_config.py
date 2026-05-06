@@ -202,6 +202,8 @@ class AppConfig:
     raconteur_system_prompt: str | None = None
     raconteur_base_prompt: str | None = None
     enable_daydream_topics: bool = True
+    disk_space_warn_pct: float = 10.0
+    disk_space_target_pct: float = 20.0
     archivist_chat_model: str = "claude-haiku-4-5"
     archivist_system_prompt: str = ""
     daydream_topic_repeat_limit: int = 3
@@ -462,6 +464,8 @@ def load_config(path: str) -> AppConfig | None:
         raconteur_system_prompt=config.get("raconteur_system_prompt"),
         raconteur_base_prompt=config.get("raconteur_base_prompt"),
         enable_daydream_topics=config.get("enable_daydream_topics", True),
+        disk_space_warn_pct=config.get("disk_space_warn_percentage", 10.0),
+        disk_space_target_pct=config.get("disk_space_target_percentage", 20.0),
         archivist_chat_model=config.get("archivist_chat_model", "claude-haiku-4-5"),
         archivist_system_prompt=config.get("archivist_system_prompt", ""),
         daydream_topic_repeat_limit=config.get("daydream_topic_repeat_limit", 3),

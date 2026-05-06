@@ -121,6 +121,24 @@ The current approach: if peak amplitude in a chunk is below `silence_threshold` 
 
 ---
 
+## Output Directory Disk Space Management
+
+`enforce_output_disk_space()` runs automatically after every creation (`save_creation_locally` → `update_recents_and_scheduling` → `enforce_output_disk_space`). The call order matters: recents are updated first so the protected set is always current when cleanup runs.
+
+**Thresholds** (configured in `config.json`):
+- `disk_space_warn_percentage` (default 10) — cleanup triggers when free space falls below this.
+- `disk_space_target_percentage` (default 20) — cleanup stops once free space reaches this.
+
+**Protected files** — any `.png` whose `base_name` appears in `state.recents` is never deleted, preventing crashes when the user browses recents with LEFT/RIGHT.
+
+**Deletion order** — unprotected `.png` files in `output/` are deleted oldest-first by mtime. The function re-checks disk usage after each deletion and stops as soon as the target is met, avoiding over-deletion.
+
+Uses `shutil.disk_usage()` for cross-platform compatibility (Windows and Linux).
+
+If the output directory runs out of deletable files before the target is reached, a warning is logged but no exception is raised — the drive may have other large consumers outside `output/`.
+
+---
+
 ## Possible Enhancements
 
 ### From the README Backlog
@@ -151,4 +169,4 @@ The current approach: if peak amplitude in a chunk is below `silence_threshold` 
 
 **Verse max length control** — add a config key for max verse lines or word count. The poet system prompt influences this, but prompt engineering alone is unreliable. A post-process trim or a function-call constraint would be more robust.
 
-**Log rotation** — `artist.log` grows unbounded. Python's `RotatingFileHandler` is a one-line change in `log_config.py`.
+**Log rotation** — implemented. `log_config.py` uses `RotatingFileHandler` (20 MB per file, 9 backups).

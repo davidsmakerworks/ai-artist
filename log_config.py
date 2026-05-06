@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 import logging
+from logging.handlers import RotatingFileHandler
 
 LOGGER_NAME = "ai-artist"
 
@@ -30,7 +31,9 @@ def create_global_logger(log_file_path: str, log_level) -> logging.Logger:
 
     logger.setLevel(log_level)
 
-    file_handler = logging.FileHandler(log_file_path)
+    file_handler = RotatingFileHandler(
+        log_file_path, maxBytes=20 * 1024 * 1024, backupCount=9
+    )
     file_handler.setLevel(log_level)
 
     console_handler = logging.StreamHandler()

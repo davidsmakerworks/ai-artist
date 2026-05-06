@@ -45,8 +45,10 @@ import json
 import logging
 import os
 import random
+import shutil
 import string
 import time
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -775,6 +777,52 @@ def save_creation_locally(
     return screenshot_file_name
 
 
+def enforce_output_disk_space(cfg: AppConfig, state: AppState) -> None:
+    """
+    If free disk space on the output drive falls below disk_space_warn_pct, delete
+    the oldest files in the output directory (oldest by mtime) until free space reaches
+    disk_space_target_pct. Files referenced in recents are never deleted.
+    """
+    usage = shutil.disk_usage(cfg.output_dir)
+    free_ratio = usage.free / usage.total
+
+    if free_ratio >= cfg.disk_space_warn_pct / 100.0:
+        return
+
+    target_ratio = cfg.disk_space_target_pct / 100.0
+    logger.warning(
+        f"Disk space low ({free_ratio:.1%} free). Cleaning output directory to reach {target_ratio:.0%}..."
+    )
+
+    protected = {entry["base_name"] + ".png" for entry in state.recents if "base_name" in entry}
+
+    try:
+        candidates = sorted(
+            [f for f in Path(cfg.output_dir).iterdir() if f.is_file() and f.suffix == ".png"],
+            key=lambda f: f.stat().st_mtime,
+        )
+    except OSError as e:
+        logger.error(f"Error listing output directory for disk cleanup: {e}")
+        return
+
+    for f in candidates:
+        if f.name in protected:
+            continue
+        if shutil.disk_usage(cfg.output_dir).free / usage.total >= target_ratio:
+            break
+        try:
+            f.unlink()
+            logger.info(f"Deleted {f.name} to free disk space")
+        except OSError as e:
+            logger.error(f"Error deleting {f.name} during disk cleanup: {e}")
+
+    final_ratio = shutil.disk_usage(cfg.output_dir).free / usage.total
+    if final_ratio < target_ratio:
+        logger.warning(
+            f"Disk cleanup finished but target not reached: {final_ratio:.1%} free (target {target_ratio:.0%})"
+        )
+
+
 def upload_creation_to_storage(
     cfg: AppConfig,
     state: AppState,
@@ -1122,6 +1170,7 @@ def run_creation_pipeline(
             screenshot_file_name = save_creation_locally(cfg, state, disp_surface)
             upload_creation_to_storage(cfg, state, storage, screenshot_file_name)
             update_recents_and_scheduling(cfg, state)
+            enforce_output_disk_space(cfg, state)
             if emotion_chip:
                 if not state.daydream:
                     state.daydreams_since_user_prompt = 0

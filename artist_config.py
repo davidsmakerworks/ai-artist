@@ -26,6 +26,8 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 
+import pygame
+
 from log_config import get_logger_name
 
 logger = logging.getLogger(get_logger_name())
@@ -215,6 +217,7 @@ class AppState:
     Mutable runtime state for the main application loop.
     """
 
+    js: pygame.joystick.JoystickType | None = None
     daydream: bool = False
     manual_daydream_timestamps: list = field(default_factory=list)
     base_file_name: str | None = None

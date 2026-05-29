@@ -2,7 +2,9 @@
 
 Generates images and verses of poetry based on user voice input. If no input is
 received for some time, autonomously generates a new creation inspired by the
-previous scene.
+previous scene. A game controller can be used to trigger creations, navigate
+recent works, and control the installation; hot-plug connect and reconnect are
+supported.
 
 ## Technologies used
 - OpenAI GPT Image 1, Stability AI SDXL or Stability AI Stable Image to generate images

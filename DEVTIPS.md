@@ -4,7 +4,7 @@
 
 The system has a clear separation between four layers:
 
-**Configuration & state** (`artist_config.py`) — `AppConfig`, `AppState`, `ButtonConfig`, `UserAction`, and `load_config()`. No pygame, no network calls. The single place to look when a config key is missing or a field type is wrong.
+**Configuration & state** (`artist_config.py`) — `AppConfig`, `AppState`, `ButtonConfig`, `UserAction`, and `load_config()`. No pygame, no network calls. The single place to look when a config key is missing or a field type is wrong. `AppState.js` holds the active `pygame.joystick.Joystick` instance (or `None`) and is updated directly by `check_for_event()` when the controller connects or disconnects.
 
 **Service wrappers** (`openai_tools.py`, `anthropic_tools.py`, `artist_speech.py`, `artist_storage.py`, `artist_moderator.py`, `audio_tools.py`) — thin, focused classes that talk to one external API or device. These generally have no business logic.
 
@@ -102,6 +102,19 @@ Emotional state is updated in two ways:
 The counter `state.daydreams_since_user_prompt` resets to 0 on any user creation. So if users interact frequently the emotional state is purely user-driven; the drift path only activates during long idle periods.
 
 Emotion is injected into both the poet's base prompt and the artist's daydream prompt, but not into the visionary's image prompt.
+
+---
+
+## Joystick Hot-Plug
+
+The controller is not required at startup. `init_joystick()` sets `state.js` to the first connected device, or `None` if none is found. From that point on, `check_for_event()` owns all joystick lifecycle transitions:
+
+- **`JOYDEVICEADDED`** — creates a new `Joystick(event.device_index)`, initializes it, and stores it in `state.js`. Fires for controllers plugged in at any time, including after startup. On some platforms it also fires for controllers already connected when the app starts; re-initializing is harmless.
+- **`JOYDEVICEREMOVED`** — clears `state.js = None`. This prevents stale `JOYAXISMOTION` events (which may briefly linger after disconnect) from being acted on.
+
+`state.js` is used inside `check_for_event()` rather than being threaded as a parameter through `wait_for_action()`. This keeps the joystick in `AppState` where it belongs as runtime state, and avoids the need for a mutable wrapper or a changed return type on the event functions.
+
+`js.get_button()` is only called in direct response to a `JOYBUTTONDOWN` event, which cannot fire from a disconnected device, so no exception handling around those calls is needed.
 
 ---
 

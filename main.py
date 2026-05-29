@@ -125,7 +125,7 @@ def init_joystick() -> pygame.joystick.JoystickType | None:
 
 
 def check_for_event(
-    js: pygame.joystick.JoystickType | None,
+    state: AppState,
     button_config: ButtonConfig,
 ) -> UserAction | None:
     """
@@ -151,12 +151,12 @@ def check_for_event(
                 return UserAction.PREVIOUS_RECENT
             if event.key == K_l:
                 return UserAction.SHOW_DEBUG_LOG
-        elif js and event.type == pygame.JOYBUTTONDOWN:
+        elif state.js and event.type == pygame.JOYBUTTONDOWN:
             if event.button == button_config.shutdown_press_button:
-                if js.get_button(button_config.shutdown_hold_button):
+                if state.js.get_button(button_config.shutdown_hold_button):
                     return UserAction.QUIT
             if event.button == button_config.debug_press_button:
-                if js.get_button(button_config.debug_hold_button):
+                if state.js.get_button(button_config.debug_hold_button):
                     return UserAction.SHOW_DEBUG_LOG
             if event.button == button_config.generate_button:
                 return UserAction.NEW
@@ -167,13 +167,21 @@ def check_for_event(
             if event.button == button_config.reveal_qr_button:
                 return UserAction.SHOW_QR
             if event.button == button_config.emotional_state_press_button:
-                if js.get_button(button_config.emotional_state_hold_button):
+                if state.js.get_button(button_config.emotional_state_hold_button):
                     return UserAction.SHOW_EMOTIONAL_STATE
-        elif js and event.type == pygame.JOYAXISMOTION:
+        elif state.js and event.type == pygame.JOYAXISMOTION:
             if event.axis == 0 and event.value < -0.5:
                 return UserAction.PREVIOUS_RECENT
             if event.axis == 0 and event.value > 0.5:
                 return UserAction.NEXT_RECENT
+        elif event.type == pygame.JOYDEVICEADDED:
+            joystick = pygame.joystick.Joystick(event.device_index)
+            joystick.init()
+            state.js = joystick
+            logger.info("Joystick connected: %s", joystick.get_name())
+        elif event.type == pygame.JOYDEVICEREMOVED:
+            state.js = None
+            logger.warning("Joystick disconnected")
 
     return None
 
@@ -308,7 +316,6 @@ def save_recents(
 
 def wait_for_action(
     cfg: AppConfig,
-    js,
     button_config: ButtonConfig,
     speech_svc: ArtistSpeech,
     disp_surface: pygame.Surface,
@@ -335,7 +342,7 @@ def wait_for_action(
                 )
                 state.manual_daydream_timestamps = state.manual_daydream_timestamps[1:]
 
-        user_action = check_for_event(js=js, button_config=button_config)
+        user_action = check_for_event(state=state, button_config=button_config)
 
         time_now = datetime.datetime.now()
 
@@ -1309,8 +1316,6 @@ def main() -> None:
     logger.debug("Initializing display...")
     disp_surface = init_display(width=cfg.display_width, height=cfg.display_height)
 
-    logger.debug("Initializing joystick...")
-    js = init_joystick()
 
     logger.debug("Initializing speech...")
     speech_svc = ArtistSpeech(
@@ -1474,6 +1479,9 @@ def main() -> None:
         + random.randint(cfg.min_daydream_time, cfg.max_daydream_time),
     )
 
+    logger.debug("Initializing joystick...")
+    state.js = init_joystick()
+
     if cfg.dynamic_speech_lines and raconteur:
         show_status_screen(surface=disp_surface, text="Waking up...", status_screen_obj=status_screen)
         generate_speech_line_buffer(cfg, state, raconteur, speech_svc)
@@ -1488,7 +1496,7 @@ def main() -> None:
 
         try:
             user_action = wait_for_action(
-                cfg, js, button_config, speech_svc, disp_surface, artist_canvas, state
+                cfg, button_config, speech_svc, disp_surface, artist_canvas, state
             )
 
             if user_action == UserAction.QUIT:

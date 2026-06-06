@@ -177,9 +177,6 @@ class AppConfig:
     azure_storage_key: str
 
     # Optional fields with defaults
-    poet_temperature: float = 1.0
-    poet_presence_penalty: float = 0.0
-    poet_frequency_penalty: float = 0.0
     num_verses: int = 3
     use_critic: bool = False
     critic_chat_model: str | None = None
@@ -377,9 +374,6 @@ def load_config(path: str) -> AppConfig | None:
         poet_chat_model=config["poet_chat_model"],
         poet_system_prompt=config["poet_system_prompt"],
         verse_base_prompt=config["verse_base_prompt"],
-        poet_temperature=config.get("poet_temperature", 1.0),
-        poet_presence_penalty=config.get("poet_presence_penalty", 0.0),
-        poet_frequency_penalty=config.get("poet_frequency_penalty", 0.0),
         num_verses=config.get("num_verses", 3),
         use_critic=config.get("use_critic", False),
         critic_chat_model=config.get("critic_chat_model"),

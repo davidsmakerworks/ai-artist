@@ -45,9 +45,6 @@
     "emotion_chip_base_prompt": "Analyze the emotional impact of the following list of prompts. Respond with a few words describing the emotional state that these prompts produce. Return only the emotional state and nothing else. Here are the prompts: ",
     "use_critic": false,
     "num_verses": 3,
-    "poet_temperature": 1.0,
-    "poet_frequency_penalty": 0.2,
-    "poet_presence_penalty": 0.2,
     "min_daydream_time": 30,
     "max_daydream_time": 60,
     "daydream_iso_weekdays": [

@@ -93,15 +93,9 @@ class ChatCharacter:
         system_prompt: str,
         model: str,
         api_key: str,
-        temperature: float = 0.8,
-        presence_penalty: float = 0.0,
-        frequency_penalty: float = 0.0,
     ) -> None:
         self._system_prompt = system_prompt
         self._model = model
-        self._temperature = temperature
-        self._presence_penalty = presence_penalty
-        self._frequency_penalty = frequency_penalty
 
         self._openai_client = OpenAI()
         self._openai_client.api_key = api_key
@@ -128,9 +122,6 @@ class ChatCharacter:
         response = self._openai_client.chat.completions.create(
             model=self._model,
             messages=self._messages,
-            temperature=self._temperature,
-            presence_penalty=self._presence_penalty,
-            frequency_penalty=self._frequency_penalty,
         )
 
         self._messages.append(response.choices[0].message)

@@ -1248,9 +1248,6 @@ def create_chat_character(
     system_prompt: str,
     model: str,
     cfg: AppConfig,
-    temperature: float = 1.0,
-    presence_penalty: float = 0.0,
-    frequency_penalty: float = 0.0,
 ):
     """
     Factory function to create a chat character using the configured chat service.
@@ -1260,16 +1257,12 @@ def create_chat_character(
             system_prompt=system_prompt,
             model=model,
             api_key=cfg.anthropic_api_key,
-            temperature=temperature,
         )
     elif cfg.chat_service == "openai":
         return ChatCharacter(
             system_prompt=system_prompt,
             model=model,
             api_key=cfg.openai_api_key,
-            temperature=temperature,
-            presence_penalty=presence_penalty,
-            frequency_penalty=frequency_penalty,
         )
     else:
         raise ValueError(f"Unknown chat service: {cfg.chat_service}")

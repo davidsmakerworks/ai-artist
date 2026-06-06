@@ -49,11 +49,9 @@ class ClaudeChatCharacter:
         system_prompt: str,
         model: str,
         api_key: str,
-        temperature: float = 1.0,
     ) -> None:
         self._system_prompt = system_prompt
         self._model = model
-        self._temperature = temperature
 
         self._anthropic_client = Anthropic(api_key=api_key)
 
@@ -76,7 +74,6 @@ class ClaudeChatCharacter:
         response = self._anthropic_client.messages.create(
             max_tokens=1024,
             model=self._model,
-            temperature=self._temperature,
             system=self._system_prompt,
             messages=self._messages,
         )

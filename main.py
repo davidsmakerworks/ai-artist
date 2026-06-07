@@ -1362,9 +1362,6 @@ def main() -> None:
             system_prompt=cfg.poet_system_prompt,
             model=cfg.poet_chat_model,
             cfg=cfg,
-            temperature=cfg.poet_temperature,
-            presence_penalty=cfg.poet_presence_penalty,
-            frequency_penalty=cfg.poet_frequency_penalty,
         )
 
         critic = None

@@ -196,6 +196,8 @@ class AppConfig:
     emotion_drift_interval: int = 3
     anthropic_api_key: str | None = None
     stability_ai_api_key: str | None = None
+    openrouter_api_key: str | None = None
+    fal_api_key: str | None = None
     dynamic_speech_lines: bool = False
     raconteur_chat_model: str | None = None
     raconteur_system_prompt: str | None = None
@@ -347,6 +349,20 @@ def load_config(path: str) -> AppConfig | None:
             )
             return None
 
+    openrouter_api_key = None
+    if config["chat_service"] == "openrouter":
+        openrouter_api_key = os.environ.get("OPENROUTER_API_KEY")
+        if openrouter_api_key is None:
+            print("Please set OPENROUTER_API_KEY environment variable for OpenRouter API key.")
+            return None
+
+    fal_api_key = None
+    if config["image_model"].startswith("fal-ai/") or config["daydream_image_model"].startswith("fal-ai/"):
+        fal_api_key = os.environ.get("FAL_API_KEY")
+        if fal_api_key is None:
+            print("Please set FAL_API_KEY environment variable for Fal.ai API key.")
+            return None
+
     stability_ai_api_key = None
     if config["image_model"] in ["sdxl", "stableimage"] or config[
         "daydream_image_model"
@@ -472,4 +488,6 @@ def load_config(path: str) -> AppConfig | None:
         azure_storage_key=azure_storage_key,
         anthropic_api_key=anthropic_api_key,
         stability_ai_api_key=stability_ai_api_key,
+        openrouter_api_key=openrouter_api_key,
+        fal_api_key=fal_api_key,
     )

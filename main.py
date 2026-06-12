@@ -69,6 +69,7 @@ from artist_classes import (
 )
 from artist_config import AppConfig, AppState, ButtonConfig, UserAction, load_config
 from artist_painters import (
+    FalImageCreator,
     GptImage1Creator,
     SDXLCreator,
     StableImageCreator,
@@ -80,6 +81,7 @@ from audio_tools import AudioRecorder
 from log_config import create_global_logger
 from openai_tools import ChatCharacter, Transcriber
 from anthropic_tools import ClaudeChatCharacter
+from openrouter_tools import OpenRouterChatCharacter
 
 
 # Global logger object to avoid passing logger to many functions
@@ -1240,6 +1242,13 @@ def create_painter(model: str, cfg: AppConfig):
             service=cfg.stable_image_svc,
             sd3_model=cfg.sd3_model,
         )
+    elif model.startswith("fal-ai/"):
+        return FalImageCreator(
+            api_key=cfg.fal_api_key,
+            model=model,
+            img_width=cfg.img_width,
+            img_height=cfg.img_height,
+        )
     else:
         raise ValueError(f"Unknown image model: {model}")
 
@@ -1263,6 +1272,12 @@ def create_chat_character(
             system_prompt=system_prompt,
             model=model,
             api_key=cfg.openai_api_key,
+        )
+    elif cfg.chat_service == "openrouter":
+        return OpenRouterChatCharacter(
+            system_prompt=system_prompt,
+            model=model,
+            api_key=cfg.openrouter_api_key,
         )
     else:
         raise ValueError(f"Unknown chat service: {cfg.chat_service}")

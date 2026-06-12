@@ -1,5 +1,7 @@
 openai
 anthropic
+fal-client
+openrouter
 azure-cognitiveservices-speech
 azure-storage-blob
 pygame

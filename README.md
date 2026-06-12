@@ -7,8 +7,8 @@ recent works, and control the installation; hot-plug connect and reconnect are
 supported.
 
 ## Technologies used
-- OpenAI GPT Image 1, Stability AI SDXL or Stability AI Stable Image to generate images
-- OpenAI GPT Chat Completion or Anthropic Claude to generate verses and
+- OpenAI GPT Image 1, Stability AI SDXL, Stability AI Stable Image, or Fal.ai to generate images
+- OpenAI GPT Chat Completion, Anthropic Claude, or OpenRouter to generate verses and
 daydream image prompts, and to choose the best verse from multiple options if
 the critic is enabled.
 - OpenAI Whisper API to transcribe speech.
@@ -22,6 +22,8 @@ the critic is enabled.
 - Azure Storage account
 - Paid Stability AI API key if using SDXL or Stable Image
 - Paid Anthropic API key if using Claude
+- Paid OpenRouter API key if using OpenRouter (`chat_service: "openrouter"`)
+- Paid Fal.ai API key if using Fal.ai image models (e.g. `image_model: "fal-ai/flux/schnell"`)
 
 A Python virtual environment (venv) should be created to avoid conflicts with system packages.
 

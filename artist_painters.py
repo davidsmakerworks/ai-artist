@@ -22,8 +22,10 @@
 
 import base64
 import logging
+import os
 import requests
 
+import fal_client
 from openai import OpenAI
 
 from log_config import get_logger_name
@@ -160,3 +162,27 @@ class GptImage1Creator:
             raise
 
         return base64.b64decode(response.data[0].b64_json)
+
+
+class FalImageCreator:
+    def __init__(self, api_key: str, model: str, img_width: int, img_height: int) -> None:
+        os.environ["FAL_KEY"] = api_key
+        self._model = model
+        self._img_width = img_width
+        self._img_height = img_height
+
+    def generate_image_data(self, prompt: str) -> bytes:
+        result = fal_client.run(
+            self._model,
+            arguments={
+                "prompt": prompt,
+                "image_size": {"width": self._img_width, "height": self._img_height},
+            },
+        )
+
+        image_url = result["images"][0]["url"]
+
+        response = requests.get(image_url)
+        response.raise_for_status()
+
+        return response.content

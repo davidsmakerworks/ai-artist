@@ -26,6 +26,7 @@ import os
 import requests
 
 import fal_client
+from fal_client import SyncClient as FalSyncClient
 from openai import OpenAI
 
 from log_config import get_logger_name
@@ -166,13 +167,13 @@ class GptImage1Creator:
 
 class FalImageCreator:
     def __init__(self, api_key: str, model: str, img_width: int, img_height: int) -> None:
-        os.environ["FAL_KEY"] = api_key
+        self._client = FalSyncClient(key=api_key)
         self._model = model
         self._img_width = img_width
         self._img_height = img_height
 
     def generate_image_data(self, prompt: str) -> bytes:
-        result = fal_client.run(
+        result = self._client.run(
             self._model,
             arguments={
                 "prompt": prompt,

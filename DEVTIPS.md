@@ -6,13 +6,13 @@ The system has a clear separation between four layers:
 
 **Configuration & state** (`artist_config.py`) — `AppConfig`, `AppState`, `ButtonConfig`, `UserAction`, and `load_config()`. No pygame, no network calls. The single place to look when a config key is missing or a field type is wrong. `AppState.js` holds the active `pygame.joystick.Joystick` instance (or `None`) and is updated directly by `check_for_event()` when the controller connects or disconnects.
 
-**Service wrappers** (`openai_tools.py`, `anthropic_tools.py`, `artist_speech.py`, `artist_storage.py`, `artist_moderator.py`, `audio_tools.py`) — thin, focused classes that talk to one external API or device. These generally have no business logic.
+**Service wrappers** (`openai_tools.py`, `anthropic_tools.py`, `openrouter_tools.py`, `artist_speech.py`, `artist_storage.py`, `artist_moderator.py`, `audio_tools.py`) — thin, focused classes that talk to one external API or device. These generally have no business logic.
 
 **Display & image generation** — split across two files:
 - `artist_classes.py` — pygame canvas and surface rendering: `ArtistCanvas`, `StatusScreen`, `ArtistCreation`, and the module-level surface functions (`get_prompt_surface`, `get_emotional_state_surface`, `get_debug_log_surface`, `draw_hourglass_indicator`, `show_status_screen`).
-- `artist_painters.py` — image generator classes that make network calls: `StableImageCreator`, `SDXLCreator`, `GptImage1Creator`. All share a `generate_image_data(prompt) -> bytes` interface.
+- `artist_painters.py` — image generator classes that make network calls: `StableImageCreator`, `SDXLCreator`, `GptImage1Creator`, `FalImageCreator`. All share a `generate_image_data(prompt) -> bytes` interface.
 
-**Application logic** (`main.py`) — the creation pipeline, event loop, factory functions (`create_painter`, `create_chat_character`), and recents persistence. At ~1400 lines it's still the largest file but now focused on orchestration.
+**Application logic** (`main.py`) — the creation pipeline, event loop, factory functions (`create_painter`, `create_chat_character`), and recents persistence. At ~1545 lines it's still the largest file but now focused on orchestration.
 
 The two factories are the single point where you'd add a new image model or LLM backend. Everything above them in the call stack is model-agnostic.
 
@@ -30,21 +30,21 @@ API keys and other secrets are read from the environment. On startup, `main()` r
 
 ---
 
-## The OpenAI vs. Anthropic Character Difference
+## The Three Chat Backends
 
-This is the most subtle behavioral split in the codebase.
+Three backends are available via `chat_service` in `config.json`.
 
 `ChatCharacter` (OpenAI, `openai_tools.py`) accumulates a full message history — it's genuinely multi-turn. After `get_chat_response()` the assistant reply is appended to `self._messages`. Calling `reset()` wipes it back to just the system prompt.
 
-`ClaudeChatCharacter` (Anthropic, `anthropic_tools.py`) does **not** append the assistant response after a call. `self._messages` only accumulates user turns. In practice this doesn't matter because every character (poet, critic, visionary, artist) calls `.reset()` before each use, but the `ai_artist` character was presumably intended to be multi-turn. If you switch `chat_service` from `openai` to `anthropic`, the artist loses its history between calls. This is a latent inconsistency.
+`ClaudeChatCharacter` (Anthropic, `anthropic_tools.py`) does **not** append the assistant response after a call. `self._messages` only accumulates user turns. In practice this doesn't matter because every character (poet, critic, visionary, artist) calls `.reset()` before each use, but the `ai_artist` character was presumably intended to be multi-turn. If you switch `chat_service` from `openai` to `anthropic`, the artist loses its history between calls. This is a latent inconsistency. Also: `ClaudeChatCharacter` has a hardcoded `max_tokens=1024` — very long verses or visionary prompts could be silently truncated.
 
-Also: `ClaudeChatCharacter` has a hardcoded `max_tokens=1024`. Very long verses or visionary prompts could be silently truncated.
+`OpenRouterChatCharacter` (`openrouter_tools.py`) uses the OpenAI-compatible SDK pointed at `https://openrouter.ai/api/v1`. It accumulates full message history the same way `ChatCharacter` does. The model string is passed through verbatim (e.g. `"deepseek/deepseek-v4-pro"`), so any model available on OpenRouter can be used by changing `config.json` alone. Requires `OPENROUTER_API_KEY`.
 
 ---
 
 ## The Critic's Fragile Number Parser
 
-`get_best_verse()` in [main.py:211](main.py#L211) determines the winning poem by scanning the critic's response for the first digit character:
+`get_best_verse()` in [main.py:223](main.py#L223) determines the winning poem by scanning the critic's response for the first digit character:
 
 ```python
 for c in critic_verdict:
@@ -65,7 +65,7 @@ This works well when the critic responds "Poem 1 is the best choice." It breaks 
 
 ## Multiple OpenAI Clients
 
-`GptImage1Creator` (in `artist_painters.py`), `Transcriber`, and every `ChatCharacter` instance each creates its own `OpenAI()` client. On a typical run you'll have 3–5 independent clients. The README flags this as a known issue. It's harmless but wasteful — consolidating them would also simplify credential management.
+`GptImage1Creator` (in `artist_painters.py`), `Transcriber`, and every `ChatCharacter` instance each creates its own `OpenAI()` client. On a typical run you'll have 3–5 independent clients. `FalImageCreator` uses a `FalSyncClient` (not OpenAI) initialized with the `FAL_API_KEY` — it does not set the key as an environment variable. The README flags the multiple-client issue as known. It's harmless but wasteful — consolidating them would also simplify credential management.
 
 ---
 
@@ -83,7 +83,7 @@ The cache key is SHA256 of `language + gender + voice + text` ([artist_speech.py
 
 ## Debug Log Path Is Hardcoded
 
-`wait_for_action()` calls `get_debug_log_surface(log_file="artist.log", ...)` ([main.py:431](main.py#L431)) with a literal path, not from config. If `log_config.py` is ever changed to write the log elsewhere, the on-screen debug view will silently show an error rather than failing obviously.
+`wait_for_action()` calls `get_debug_log_surface(log_file="artist.log", ...)` ([main.py:440](main.py#L440)) with a literal path, not from config. If `log_config.py` is ever changed to write the log elsewhere, the on-screen debug view will silently show an error rather than failing obviously.
 
 ---
 
@@ -120,7 +120,7 @@ The controller is not required at startup. `init_joystick()` sets `state.js` to 
 
 ## Daydream Rate Limiting
 
-Manual daydreams (pressing `d`) are rate-limited by a sliding window: `manual_daydream_window` seconds, `manual_daydream_limit` triggers ([main.py:355](main.py#L355)). Expired timestamps are cleaned up at the top of the `wait_for_action()` loop. Auto-daydreams are not rate-limited in the same way — they're controlled purely by the scheduled `next_change_time`.
+Manual daydreams (pressing `d`) are rate-limited by a sliding window: `manual_daydream_window` seconds, `manual_daydream_limit` triggers ([main.py:340](main.py#L340)). Expired timestamps are cleaned up at the top of the `wait_for_action()` loop. Auto-daydreams are not rate-limited in the same way — they're controlled purely by the scheduled `next_change_time`.
 
 ---
 
@@ -164,13 +164,13 @@ If the output directory runs out of deletable files before the target is reached
 
 ### Ideas from Code Review
 
-**Per-character LLM backend** — the single `chat_service` key forces all characters to use the same provider. A dict like `{ "poet": "anthropic", "visionary": "openai" }` would let you use cheaper or faster models for simpler roles (e.g. critic) while using a stronger model for the poet.
+**Per-character LLM backend** — the single `chat_service` key forces all characters to use the same provider (OpenAI, Anthropic, or OpenRouter). A dict like `{ "poet": "anthropic", "visionary": "openrouter" }` would let you mix providers per role. Note that OpenRouter already lets you mix model tiers within a single `chat_service`, so this matters most when you want to mix native Anthropic/OpenAI APIs with OpenRouter.
 
 **Non-blocking pipeline** — the entire creation pipeline runs on the main thread, blocking input for 10–30+ seconds. A `threading.Thread` for the pipeline would allow ESC to abort a running generation. The main challenge is thread-safe pygame surface updates.
 
 **Better critic output format** — use the model's structured output / JSON mode (available on both OpenAI and recent Anthropic models) to get the critic to return `{"choice": 2}` rather than scanning free text for a digit.
 
-**Configurable `max_tokens` for Claude** — expose `max_tokens` in config or per-character, rather than the hardcoded 1024 in `ClaudeChatCharacter`.
+**Configurable `max_tokens` for Claude** — expose `max_tokens` in config or per-character, rather than the hardcoded 1024 in `ClaudeChatCharacter`. OpenAI and OpenRouter don't have this cap.
 
 **SSML voice styles** — use the style/pitch/rate fields already wired up in `ArtistSpeech` to differentiate daydream speech from user-response speech.
 
@@ -182,4 +182,4 @@ If the output directory runs out of deletable files before the target is reached
 
 **Verse max length control** — add a config key for max verse lines or word count. The poet system prompt influences this, but prompt engineering alone is unreliable. A post-process trim or a function-call constraint would be more robust.
 
-**Log rotation** — implemented. `log_config.py` uses `RotatingFileHandler` (20 MB per file, 9 backups).
+**Single shared OpenAI client** — `GptImage1Creator`, `Transcriber`, and `ChatCharacter` each instantiate their own `OpenAI()`. Consolidating would simplify credential management.

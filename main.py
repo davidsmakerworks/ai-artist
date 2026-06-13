@@ -79,9 +79,8 @@ from artist_speech import ArtistSpeech
 from artist_storage import ArtistStorage
 from audio_tools import AudioRecorder
 from log_config import create_global_logger
-from openai_tools import ChatCharacter, Transcriber
-from anthropic_tools import ClaudeChatCharacter
-from openrouter_tools import OpenRouterChatCharacter
+from artist_characters import ClaudeChatCharacter, OpenAIChatCharacter, OpenRouterChatCharacter
+from audio_tools import Transcriber
 
 
 # Global logger object to avoid passing logger to many functions
@@ -199,7 +198,7 @@ def get_random_string(length: int) -> str:
 
 
 def get_one_verse(
-    poet: ChatCharacter,
+    poet: OpenAIChatCharacter,
     base_prompt: str,
     user_prompt: str,
 ) -> str:
@@ -207,11 +206,10 @@ def get_one_verse(
     Get one verse from poet character.
     """
 
-    # Poet is a single-turn character so no history is needed
-    poet.reset()
+
 
     try:
-        verse = poet.get_chat_response(base_prompt + " " + user_prompt).content
+        verse = poet.get_chat_response(base_prompt + " " + user_prompt)
     except Exception as e:
         logger.error(f"Error getting verse from poet")
         logger.exception(e)
@@ -221,8 +219,8 @@ def get_one_verse(
 
 
 def get_best_verse(
-    poet: ChatCharacter,
-    critic: ChatCharacter,
+    poet: OpenAIChatCharacter,
+    critic: OpenAIChatCharacter,
     base_prompt: str,
     user_prompt: str,
     num_verses: int,
@@ -241,8 +239,7 @@ def get_best_verse(
 
         verses.append(verse)
 
-    # Critic is a single-turn character so no history is needed
-    critic.reset()
+
 
     critic_message = f"Theme: {user_prompt}\n"
 
@@ -255,7 +252,7 @@ def get_best_verse(
     chosen_poem = None
 
     try:
-        critic_verdict = critic.get_chat_response(critic_message).content
+        critic_verdict = critic.get_chat_response(critic_message)
         logger.info(f"Critic verdict: {critic_verdict}")
 
         for c in critic_verdict:
@@ -538,10 +535,9 @@ def extract_daydream_topics(prompt: str, archivist) -> dict | None:
     Use an LLM to extract subjects and settings from a daydream prompt.
     Returns {"subjects": [...], "settings": [...]} or None on failure.
     """
-    archivist.reset()
     try:
         response = archivist.get_chat_response(message=prompt)
-        raw = response.content.strip()
+        raw = response.strip()
         logger.debug(f"Raw topic extraction response: {raw}")
         # Strip markdown code fences if present (e.g. ```json ... ```)
         if raw.startswith("```"):
@@ -575,7 +571,6 @@ def generate_daydream_prompt(
     """
     Generate an AI prompt from recent creations, storing the result in state.user_prompt.
     """
-    ai_artist.reset()
     show_status_screen(
         surface=disp_surface, text="Daydreaming...", status_screen_obj=status_screen
     )
@@ -612,7 +607,7 @@ def generate_daydream_prompt(
             logger.debug("No overused daydream topics to exclude")
 
     logger.debug(f"Daydreaming based on: {daydream_prompt}")
-    state.user_prompt = ai_artist.get_chat_response(message=full_prompt).content
+    state.user_prompt = ai_artist.get_chat_response(message=full_prompt)
     logger.info(f"Daydreamed: {state.user_prompt}")
 
     state.pending_daydream_topics = None
@@ -657,10 +652,10 @@ def build_visionary_prompt(visionary, base_prompt: str | None, verse: str) -> st
     Use the visionary to interpret a poem into an image prompt optimized for image models.
     Falls back to the original verse if the visionary fails.
     """
-    visionary.reset()
+
 
     try:
-        return visionary.get_chat_response((base_prompt or "") + verse).content
+        return visionary.get_chat_response((base_prompt or "") + verse)
     except Exception as e:
         logger.error("Error building visionary prompt")
         logger.exception(e)
@@ -924,11 +919,10 @@ def generate_emotional_state(cfg: AppConfig, state: AppState, emotion_chip) -> N
 
     prompt_list = ", ".join(entry["prompt"] for entry in state.user_prompts)
 
-    emotion_chip.reset()
     try:
         state.emotional_state = emotion_chip.get_chat_response(
             message=(cfg.emotion_chip_base_prompt or "") + " " + prompt_list
-        ).content
+        )
         logger.info(f"Emotional state: {state.emotional_state}")
     except Exception as e:
         logger.error("Error generating emotional state")
@@ -961,9 +955,8 @@ def drift_emotional_state(cfg: AppConfig, state: AppState, emotion_chip) -> None
         + ", ".join(recent_daydream_prompts)
     )
 
-    emotion_chip.reset()
     try:
-        state.emotional_state = emotion_chip.get_chat_response(message=message).content
+        state.emotional_state = emotion_chip.get_chat_response(message=message)
         logger.info(f"Emotional state (drifted): {state.emotional_state}")
     except Exception as e:
         logger.error("Error drifting emotional state")
@@ -1007,10 +1000,8 @@ def generate_speech_line_buffer(
     else:
         full_prompt = cfg.raconteur_base_prompt or ""
 
-    raconteur.reset()
     try:
-        response = raconteur.get_chat_response(message=full_prompt)
-        raw = response.content
+        raw = raconteur.get_chat_response(message=full_prompt)
         logger.debug(f"Raconteur raw response: {raw}")
         lines = json.loads(raw)
     except Exception as e:
@@ -1268,7 +1259,7 @@ def create_chat_character(
             api_key=cfg.anthropic_api_key,
         )
     elif cfg.chat_service == "openai":
-        return ChatCharacter(
+        return OpenAIChatCharacter(
             system_prompt=system_prompt,
             model=model,
             api_key=cfg.openai_api_key,

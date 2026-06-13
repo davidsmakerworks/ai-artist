@@ -6,7 +6,9 @@ The system has a clear separation between four layers:
 
 **Configuration & state** (`artist_config.py`) — `AppConfig`, `AppState`, `ButtonConfig`, `UserAction`, and `load_config()`. No pygame, no network calls. The single place to look when a config key is missing or a field type is wrong. `AppState.js` holds the active `pygame.joystick.Joystick` instance (or `None`) and is updated directly by `check_for_event()` when the controller connects or disconnects.
 
-**Service wrappers** (`openai_tools.py`, `anthropic_tools.py`, `openrouter_tools.py`, `artist_speech.py`, `artist_storage.py`, `artist_moderator.py`, `audio_tools.py`) — thin, focused classes that talk to one external API or device. These generally have no business logic.
+**Chat characters** (`artist_characters.py`) — `OpenAIChatCharacter`, `ClaudeChatCharacter`, and `OpenRouterChatCharacter`, plus their response wrapper classes. All three share the same single-turn interface: `get_chat_response(message) -> response`. The vendor-specific files (`openai_tools.py`, `anthropic_tools.py`, `openrouter_tools.py`) are now empty stubs reserved for future non-character utilities.
+
+**Service wrappers** (`artist_speech.py`, `artist_storage.py`, `artist_moderator.py`, `audio_tools.py`) — thin, focused classes that talk to one external API or device. These generally have no business logic. `audio_tools.py` also contains `Transcriber`, which wraps the OpenAI Whisper API for speech-to-text.
 
 **Display & image generation** — split across two files:
 - `artist_classes.py` — pygame canvas and surface rendering: `ArtistCanvas`, `StatusScreen`, `ArtistCreation`, and the module-level surface functions (`get_prompt_surface`, `get_emotional_state_surface`, `get_debug_log_surface`, `draw_hourglass_indicator`, `show_status_screen`).
@@ -32,13 +34,13 @@ API keys and other secrets are read from the environment. On startup, `main()` r
 
 ## The Three Chat Backends
 
-Three backends are available via `chat_service` in `config.json`.
+Three backends are available via `chat_service` in `config.json`. All live in `artist_characters.py` and share an identical single-turn interface: construct with `(system_prompt, model, api_key)`, call `get_chat_response(message)`, read `.content` from the result.
 
-`ChatCharacter` (OpenAI, `openai_tools.py`) accumulates a full message history — it's genuinely multi-turn. After `get_chat_response()` the assistant reply is appended to `self._messages`. Calling `reset()` wipes it back to just the system prompt.
+`OpenAIChatCharacter` uses the OpenAI SDK (`openai.chat.completions.create`). Each call sends only the system prompt and the single user message — there is no accumulated history.
 
-`ClaudeChatCharacter` (Anthropic, `anthropic_tools.py`) does **not** append the assistant response after a call. `self._messages` only accumulates user turns. In practice this doesn't matter because every character (poet, critic, visionary, artist) calls `.reset()` before each use, but the `ai_artist` character was presumably intended to be multi-turn. If you switch `chat_service` from `openai` to `anthropic`, the artist loses its history between calls. This is a latent inconsistency. Also: `ClaudeChatCharacter` has a hardcoded `max_tokens=1024` — very long verses or visionary prompts could be silently truncated.
+`ClaudeChatCharacter` uses the Anthropic SDK (`anthropic.messages.create`). Same single-turn contract. Note the hardcoded `max_tokens=1024` — very long verses or visionary prompts could be silently truncated.
 
-`OpenRouterChatCharacter` (`openrouter_tools.py`) uses the OpenAI-compatible SDK pointed at `https://openrouter.ai/api/v1`. It accumulates full message history the same way `ChatCharacter` does. The model string is passed through verbatim (e.g. `"deepseek/deepseek-v4-pro"`), so any model available on OpenRouter can be used by changing `config.json` alone. Requires `OPENROUTER_API_KEY`.
+`OpenRouterChatCharacter` uses the native OpenRouter SDK (`openrouter.chat.send`). The model string is passed through verbatim (e.g. `"deepseek/deepseek-v4-5"`), so any model available on OpenRouter can be used by changing `config.json` alone. Requires `OPENROUTER_API_KEY`.
 
 ---
 
@@ -65,7 +67,7 @@ This works well when the critic responds "Poem 1 is the best choice." It breaks 
 
 ## Multiple OpenAI Clients
 
-`GptImage1Creator` (in `artist_painters.py`), `Transcriber`, and every `ChatCharacter` instance each creates its own `OpenAI()` client. On a typical run you'll have 3–5 independent clients. `FalImageCreator` uses a `FalSyncClient` (not OpenAI) initialized with the `FAL_API_KEY` — it does not set the key as an environment variable. The README flags the multiple-client issue as known. It's harmless but wasteful — consolidating them would also simplify credential management.
+`GptImage1Creator` (in `artist_painters.py`), `Transcriber` (in `audio_tools.py`), and every `OpenAIChatCharacter` instance each creates its own `OpenAI()` client. On a typical run you'll have 3–5 independent clients. `FalImageCreator` uses a `FalSyncClient` (not OpenAI) initialized with the `FAL_API_KEY` — it does not set the key as an environment variable. The README flags the multiple-client issue as known. It's harmless but wasteful — consolidating them would also simplify credential management.
 
 ---
 
@@ -182,4 +184,4 @@ If the output directory runs out of deletable files before the target is reached
 
 **Verse max length control** — add a config key for max verse lines or word count. The poet system prompt influences this, but prompt engineering alone is unreliable. A post-process trim or a function-call constraint would be more robust.
 
-**Single shared OpenAI client** — `GptImage1Creator`, `Transcriber`, and `ChatCharacter` each instantiate their own `OpenAI()`. Consolidating would simplify credential management.
+**Single shared OpenAI client** — `GptImage1Creator`, `Transcriber`, and `OpenAIChatCharacter` each instantiate their own `OpenAI()`. Consolidating would simplify credential management.

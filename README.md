@@ -8,8 +8,8 @@ supported.
 
 ## Technologies used
 - OpenAI GPT Image 1, Stability AI SDXL, Stability AI Stable Image, or Fal.ai to generate images
-- OpenAI GPT Chat Completion, Anthropic Claude, or OpenRouter to generate verses and
-daydream image prompts, and to choose the best verse from multiple options if
+- OpenAI GPT Chat Completion, Anthropic Claude, or OpenRouter (native SDK) to generate
+verses and daydream image prompts, and to choose the best verse from multiple options if
 the critic is enabled.
 - OpenAI Whisper API to transcribe speech.
 - Azure Speech API to convert text to speech
@@ -29,7 +29,6 @@ A Python virtual environment (venv) should be created to avoid conflicts with sy
 
 ## Possible future enhancements
 - Cleanup and refactor (in progress - AI assisted)
-- Use one OpenAI SDK client for entire application(?)
 - Improve error handling for any/all web requests
 - Add method to change microphone sensitivity/volume
 - Handle slow uploads to Azure Blob Storage

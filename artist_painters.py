@@ -22,10 +22,8 @@
 
 import base64
 import logging
-import os
 import requests
 
-import fal_client
 from fal_client import SyncClient as FalSyncClient
 from openai import OpenAI
 
@@ -35,7 +33,9 @@ logger = logging.getLogger(get_logger_name())
 
 
 class StableImageCreator:
-    def __init__(self, api_key: str, service: str, sd3_model: str | None = None) -> None:
+    def __init__(
+        self, api_key: str, service: str, sd3_model: str | None = None
+    ) -> None:
         """
         Initialize the StableImageCreator object.
 
@@ -130,7 +130,9 @@ class SDXLCreator:
             else:
                 raise RuntimeError("No image data returned")
         else:
-            raise RuntimeError(f"Stable Diffusion XL model error: {str(response.json())}")
+            raise RuntimeError(
+                f"Stable Diffusion XL model error: {str(response.json())}"
+            )
 
 
 class GptImage1Creator:
@@ -166,7 +168,9 @@ class GptImage1Creator:
 
 
 class FalImageCreator:
-    def __init__(self, api_key: str, model: str, img_width: int, img_height: int) -> None:
+    def __init__(
+        self, api_key: str, model: str, img_width: int, img_height: int
+    ) -> None:
         self._client = FalSyncClient(key=api_key)
         self._model = model
         self._img_width = img_width

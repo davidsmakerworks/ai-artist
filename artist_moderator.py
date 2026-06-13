@@ -45,7 +45,7 @@ class ArtistModerator:
                 model="omni-moderation-latest", input=msg
             )
         except Exception as e:
-            logger.error(f"Moderation response: {response}")
+            logger.error("Error during moderation check")
             logger.exception(e)
             raise
 

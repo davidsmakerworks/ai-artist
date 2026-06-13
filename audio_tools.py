@@ -21,8 +21,55 @@
 # SOFTWARE.
 
 import array
+import io
+import logging
+import wave
 
 import pyaudio
+from openai import OpenAI
+
+from log_config import get_logger_name
+
+logger = logging.getLogger(get_logger_name())
+
+
+class Transcriber:
+    def __init__(
+        self, channels: int, sample_width: int, framerate: int, model: str, api_key: str
+    ) -> None:
+        self.channels = channels
+        self.sample_width = sample_width
+        self.framerate = framerate
+        self.model = model
+
+        self._openai_client = OpenAI()
+        self._openai_client.api_key = api_key
+
+    def transcribe(self, audio_stream: bytes) -> str:
+        audio_data = io.BytesIO()
+        writer = wave.open(audio_data, "wb")
+
+        writer.setnchannels(self.channels)
+        writer.setsampwidth(self.sample_width)
+        writer.setframerate(self.framerate)
+
+        writer.writeframes(audio_stream)
+
+        writer.close()
+
+        audio_data.seek(0)
+        audio_data.name = "audio.wav"  # Name hint only, not a file on disk
+
+        try:
+            response = self._openai_client.audio.transcriptions.create(
+                model=self.model, file=audio_data
+            )
+        except Exception as e:
+            logger.error(f"Transcriber response: {response}")
+            logger.exception(e)
+            raise
+
+        return response.text
 
 
 class AudioPlayer:

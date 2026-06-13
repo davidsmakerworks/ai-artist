@@ -4,7 +4,7 @@
 
 The system has a clear separation between four layers:
 
-**Configuration & state** (`artist_config.py`) — `AppConfig`, `AppState`, `ButtonConfig`, `UserAction`, and `load_config()`. No pygame, no network calls. The single place to look when a config key is missing or a field type is wrong. `AppState.js` holds the active `pygame.joystick.Joystick` instance (or `None`) and is updated directly by `check_for_event()` when the controller connects or disconnects.
+**Configuration & state** (`artist_config.py`) — `AppConfig`, `AppState`, `CharacterConfig`, `ButtonConfig`, `UserAction`, and `load_config()`. No pygame, no network calls. The single place to look when a config key is missing or a field type is wrong. `AppState.js` holds the active `pygame.joystick.Joystick` instance (or `None`) and is updated directly by `check_for_event()` when the controller connects or disconnects.
 
 **Chat characters** (`artist_characters.py`) — `OpenAIChatCharacter`, `ClaudeChatCharacter`, and `OpenRouterChatCharacter`, plus their response wrapper classes. All three share the same single-turn interface: `get_chat_response(message) -> response`. The vendor-specific files (`openai_tools.py`, `anthropic_tools.py`, `openrouter_tools.py`) are now empty stubs reserved for future non-character utilities.
 
@@ -34,7 +34,7 @@ API keys and other secrets are read from the environment. On startup, `main()` r
 
 ## The Three Chat Backends
 
-Three backends are available via `chat_service` in `config.json`. All live in `artist_characters.py` and share an identical single-turn interface: construct with `(system_prompt, model, api_key)`, call `get_chat_response(message)`, read `.content` from the result.
+Three backends are available, selected per character via the `"service"` key inside each character's config object in `config.json`. All live in `artist_characters.py` and share an identical single-turn interface: construct with `(system_prompt, model, api_key, provider_options)`, call `get_chat_response(message)`.
 
 `OpenAIChatCharacter` uses the OpenAI SDK (`openai.chat.completions.create`). Each call sends only the system prompt and the single user message — there is no accumulated history.
 
@@ -42,7 +42,7 @@ Three backends are available via `chat_service` in `config.json`. All live in `a
 
 `OpenRouterChatCharacter` uses the native OpenRouter SDK (`openrouter.chat.send`). The model string is passed through verbatim (e.g. `"deepseek/deepseek-v4-5"`), so any model available on OpenRouter can be used by changing `config.json` alone. Requires `OPENROUTER_API_KEY`.
 
-All three constructors accept an optional `provider_options: dict | None = None`. The dict is splatted into the API call as extra keyword arguments. `create_chat_character()` in `main.py` also accepts `provider_options`; if not passed it falls back to the global `openrouter_options` / `openai_options` / `anthropic_options` dict from `AppConfig` (loaded from `config.json`). This is the correct way to pass provider-specific parameters such as `reasoning` effort, `temperature`, or `top_p` without touching the character classes.
+All three constructors accept `provider_options: dict | None = None`. The dict is splatted into the API call as extra kwargs. `create_chat_character(char_cfg, cfg)` passes `char_cfg.options` (the `"options"` dict from the character's config object) directly — there is no global fallback. This lets each character have different reasoning effort, temperature, or any other provider-specific parameter.
 
 ---
 
@@ -168,9 +168,9 @@ If the output directory runs out of deletable files before the target is reached
 
 ### Ideas from Code Review
 
-**Per-character LLM backend** — the single `chat_service` key forces all characters to use the same provider (OpenAI, Anthropic, or OpenRouter). A dict like `{ "poet": "anthropic", "visionary": "openrouter" }` would let you mix providers per role. Note that OpenRouter already lets you mix model tiers within a single `chat_service`, so this matters most when you want to mix native Anthropic/OpenAI APIs with OpenRouter. (`provider_options` already gives per-call kwargs but not per-character provider switching.)
+**Per-character LLM backend** ✓ *Implemented* — each character's `config.json` object now has its own `"service"`, `"model"`, and `"options"` fields, replacing the old global `chat_service`. Roles can freely mix providers.
 
-**Per-character provider options** — `openrouter_options` / `openai_options` / `anthropic_options` in `config.json` apply globally to every character. To pass different options per character (e.g. high reasoning effort only for the visionary), pass `provider_options` explicitly to `create_chat_character()` at each call site in `main.py`.
+**Per-character provider options** ✓ *Implemented* — the global `openrouter_options` / `openai_options` / `anthropic_options` keys have been replaced by per-character `"options"` dicts inside each character's config object.
 
 **Non-blocking pipeline** — the entire creation pipeline runs on the main thread, blocking input for 10–30+ seconds. A `threading.Thread` for the pipeline would allow ESC to abort a running generation. The main challenge is thread-safe pygame surface updates.
 

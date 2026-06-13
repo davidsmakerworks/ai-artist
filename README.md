@@ -10,8 +10,9 @@ supported.
 - OpenAI GPT Image 1, Stability AI SDXL, Stability AI Stable Image, or Fal.ai to generate images
 - OpenAI GPT Chat Completion, Anthropic Claude, or OpenRouter (native SDK) to generate
 verses and daydream image prompts, and to choose the best verse from multiple options if
-the critic is enabled. Provider-specific API options (e.g. reasoning effort) are
-configurable per-provider in `config.json`.
+the critic is enabled. Each AI character role (artist, poet, critic, visionary, emotion_chip,
+raconteur, archivist) has its own independently configurable service, model, and
+provider-specific options in `config.json`.
 - OpenAI Whisper API to transcribe speech.
 - Azure Speech API to convert text to speech
 - Azure Blob Storage to store downloadable images
@@ -22,8 +23,8 @@ configurable per-provider in `config.json`.
 - Azure Cognitive Services Speech Service (free tier)
 - Azure Storage account
 - Paid Stability AI API key if using SDXL or Stable Image
-- Paid Anthropic API key if using Claude
-- Paid OpenRouter API key if using OpenRouter (`chat_service: "openrouter"`)
+- Paid Anthropic API key if any character uses `"service": "anthropic"`
+- Paid OpenRouter API key if any character uses `"service": "openrouter"`
 - Paid Fal.ai API key if using Fal.ai image models (e.g. `image_model: "fal-ai/flux/schnell"`)
 
 A Python virtual environment (venv) should be created to avoid conflicts with system packages.

@@ -67,7 +67,7 @@ from artist_classes import (
     get_prompt_surface,
     show_status_screen,
 )
-from artist_config import AppConfig, AppState, ButtonConfig, UserAction, load_config
+from artist_config import AppConfig, AppState, ButtonConfig, CharacterConfig, UserAction, load_config
 from artist_painters import (
     FalImageCreator,
     GptImage1Creator,
@@ -591,12 +591,12 @@ def generate_daydream_prompt(
     if cfg.enable_emotion_chip and state.emotional_state:
         full_prompt = (
             f"Your current emotional state is {state.emotional_state}. This emotional state should influence the style, tone and content of your response. "
-            + cfg.artist_base_prompt
+            + cfg.artist.base_prompt
             + " "
             + daydream_prompt
         )
     else:
-        full_prompt = cfg.artist_base_prompt + " " + daydream_prompt
+        full_prompt = cfg.artist.base_prompt + " " + daydream_prompt
 
     if cfg.enable_daydream_topics:
         overused = get_overused_topics(state.recents, cfg.daydream_topic_repeat_limit)
@@ -628,7 +628,7 @@ def generate_verse(cfg: AppConfig, poet, critic, state: AppState, base_prompt: s
     """
     Generate a verse using the poet, optionally with critic selection.
     """
-    effective_base_prompt = base_prompt if base_prompt is not None else cfg.verse_base_prompt
+    effective_base_prompt = base_prompt if base_prompt is not None else cfg.poet.base_prompt
     if cfg.use_critic:
         logger.debug("Getting best verse...")
         return get_best_verse(
@@ -919,9 +919,10 @@ def generate_emotional_state(cfg: AppConfig, state: AppState, emotion_chip) -> N
 
     prompt_list = ", ".join(entry["prompt"] for entry in state.user_prompts)
 
+    assert cfg.emotion_chip
     try:
         state.emotional_state = emotion_chip.get_chat_response(
-            message=(cfg.emotion_chip_base_prompt or "") + " " + prompt_list
+            message=cfg.emotion_chip.base_prompt + " " + prompt_list
         )
         logger.info(f"Emotional state: {state.emotional_state}")
     except Exception as e:
@@ -948,9 +949,10 @@ def drift_emotional_state(cfg: AppConfig, state: AppState, emotion_chip) -> None
         if state.emotional_state
         else ""
     )
+    assert cfg.emotion_chip
     message = (
         current_state_context
-        + (cfg.emotion_chip_base_prompt or "")
+        + cfg.emotion_chip.base_prompt
         + " "
         + ", ".join(recent_daydream_prompts)
     )
@@ -992,13 +994,14 @@ def generate_speech_line_buffer(
 
     logger.info(f"Raconteur: generating lines for: {categories_needing_lines}...")
 
+    assert cfg.raconteur
     if cfg.enable_emotion_chip and state.emotional_state:
         full_prompt = (
             f"Your current emotional state is {state.emotional_state}. This emotional state should influence the style, tone and content of your response. "
-            + (cfg.raconteur_base_prompt or "")
+            + cfg.raconteur.base_prompt
         )
     else:
-        full_prompt = cfg.raconteur_base_prompt or ""
+        full_prompt = cfg.raconteur.base_prompt
 
     try:
         raw = raconteur.get_chat_response(message=full_prompt)
@@ -1123,7 +1126,7 @@ def run_creation_pipeline(
             logger.info(f"Generating verse with emotional state: {state.emotional_state}")
             verse_base_prompt = (
                 f"Your current emotional state is {state.emotional_state}. This emotional state should influence the style, tone and content of your response. "
-                + cfg.verse_base_prompt
+                + cfg.poet.base_prompt
             )
         else:
             verse_base_prompt = None
@@ -1138,10 +1141,10 @@ def run_creation_pipeline(
         logger.info(f"Poem (original): {verse_log}")
 
         if enhancement_type == "llm":
-            img_prompt = build_visionary_prompt(visionary, cfg.llm_visionary_base_prompt, verse)
+            img_prompt = build_visionary_prompt(visionary, cfg.visionary.llm_base_prompt, verse)
             logger.info(f"Prompt (enhanced, llm): {img_prompt}")
         elif enhancement_type == "clip":
-            img_prompt = build_visionary_prompt(visionary, cfg.clip_visionary_base_prompt, verse)
+            img_prompt = build_visionary_prompt(visionary, cfg.visionary.clip_base_prompt, verse)
             logger.info(f"Prompt (enhanced, clip): {img_prompt}")
         else:
             img_prompt = verse
@@ -1244,38 +1247,33 @@ def create_painter(model: str, cfg: AppConfig):
         raise ValueError(f"Unknown image model: {model}")
 
 
-def create_chat_character(
-    system_prompt: str,
-    model: str,
-    cfg: AppConfig,
-    provider_options: dict | None = None,
-):
+def create_chat_character(char_cfg: CharacterConfig, cfg: AppConfig):
     """
-    Factory function to create a chat character using the configured chat service.
+    Factory function to create a chat character from its per-character config.
     """
-    if cfg.chat_service == "anthropic":
+    if char_cfg.service == "anthropic":
         return ClaudeChatCharacter(
-            system_prompt=system_prompt,
-            model=model,
+            system_prompt=char_cfg.system_prompt,
+            model=char_cfg.model,
             api_key=cfg.anthropic_api_key,
-            provider_options=provider_options or cfg.anthropic_options,
+            provider_options=char_cfg.options,
         )
-    elif cfg.chat_service == "openai":
+    elif char_cfg.service == "openai":
         return OpenAIChatCharacter(
-            system_prompt=system_prompt,
-            model=model,
+            system_prompt=char_cfg.system_prompt,
+            model=char_cfg.model,
             api_key=cfg.openai_api_key,
-            provider_options=provider_options or cfg.openai_options,
+            provider_options=char_cfg.options,
         )
-    elif cfg.chat_service == "openrouter":
+    elif char_cfg.service == "openrouter":
         return OpenRouterChatCharacter(
-            system_prompt=system_prompt,
-            model=model,
+            system_prompt=char_cfg.system_prompt,
+            model=char_cfg.model,
             api_key=cfg.openrouter_api_key,
-            provider_options=provider_options or cfg.openrouter_options,
+            provider_options=char_cfg.options,
         )
     else:
-        raise ValueError(f"Unknown chat service: {cfg.chat_service}")
+        raise ValueError(f"Unknown chat service: {char_cfg.service}")
 
 
 def main() -> None:
@@ -1353,11 +1351,7 @@ def main() -> None:
 
     try:
         logger.debug("Initializing autonomous AI artist...")
-        ai_artist = create_chat_character(
-            system_prompt=cfg.artist_system_prompt,
-            model=cfg.artist_chat_model,
-            cfg=cfg,
-        )
+        ai_artist = create_chat_character(cfg.artist, cfg)
 
         logger.debug(f"Initializing painter with image model {cfg.image_model}...")
         painter = create_painter(cfg.image_model, cfg)
@@ -1368,77 +1362,46 @@ def main() -> None:
         daydream_painter = create_painter(cfg.daydream_image_model, cfg)
 
         logger.debug("Initializing poet...")
-        poet = create_chat_character(
-            system_prompt=cfg.poet_system_prompt,
-            model=cfg.poet_chat_model,
-            cfg=cfg,
-        )
+        poet = create_chat_character(cfg.poet, cfg)
 
         critic = None
         if cfg.use_critic:
+            if not cfg.critic:
+                raise ValueError(
+                    "critic character config must be set in config when use_critic is true."
+                )
             logger.debug("Initializing critic...")
-            critic = create_chat_character(
-                system_prompt=cfg.critic_system_prompt,
-                model=cfg.critic_chat_model,
-                cfg=cfg,
-            )
+            critic = create_chat_character(cfg.critic, cfg)
 
         logger.debug("Initializing visionary...")
-        visionary = create_chat_character(
-            system_prompt=cfg.visionary_system_prompt,
-            model=cfg.visionary_chat_model,
-            cfg=cfg,
-        )
+        visionary = create_chat_character(cfg.visionary, cfg)
 
         emotion_chip = None
         if cfg.enable_emotion_chip:
-            if (
-                not cfg.emotion_chip_system_prompt
-                or not cfg.emotion_chip_base_prompt
-                or not cfg.emotion_chip_chat_model
-            ):
+            if not cfg.emotion_chip:
                 raise ValueError(
-                    "emotion_chip_system_prompt, emotion_chip_base_prompt, and emotion_chip_chat_model "
-                    "must all be set in config when enable_emotion_chip is true."
+                    "emotion_chip character config must be set in config when enable_emotion_chip is true."
                 )
             logger.debug("Initializing emotion chip...")
-            emotion_chip = create_chat_character(
-                system_prompt=cfg.emotion_chip_system_prompt,
-                model=cfg.emotion_chip_chat_model,
-                cfg=cfg,
-            )
+            emotion_chip = create_chat_character(cfg.emotion_chip, cfg)
 
         raconteur = None
         if cfg.dynamic_speech_lines:
-            if (
-                not cfg.raconteur_system_prompt
-                or not cfg.raconteur_base_prompt
-                or not cfg.raconteur_chat_model
-            ):
+            if not cfg.raconteur:
                 raise ValueError(
-                    "raconteur_system_prompt, raconteur_base_prompt, and raconteur_chat_model "
-                    "must all be set in config when dynamic_speech_lines is true."
+                    "raconteur character config must be set in config when dynamic_speech_lines is true."
                 )
             logger.debug("Initializing raconteur...")
-            raconteur = create_chat_character(
-                system_prompt=cfg.raconteur_system_prompt,
-                model=cfg.raconteur_chat_model,
-                cfg=cfg,
-            )
+            raconteur = create_chat_character(cfg.raconteur, cfg)
 
         archivist = None
         if cfg.enable_daydream_topics:
-            if not cfg.archivist_system_prompt or not cfg.archivist_chat_model:
+            if not cfg.archivist:
                 raise ValueError(
-                    "archivist_system_prompt and archivist_chat_model "
-                    "must both be set in config when enable_daydream_topics is true."
+                    "archivist character config must be set in config when enable_daydream_topics is true."
                 )
             logger.debug("Initializing archivist...")
-            archivist = create_chat_character(
-                system_prompt=cfg.archivist_system_prompt,
-                model=cfg.archivist_chat_model,
-                cfg=cfg,
-            )
+            archivist = create_chat_character(cfg.archivist, cfg)
     except ValueError as e:
         print(str(e))
         logger.error(str(e))

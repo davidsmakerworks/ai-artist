@@ -104,12 +104,13 @@ class OpenRouterChatCharacter:
         self._model = model
         self._provider_options = provider_options or {}
 
-        self._client = OpenRouter(api_key=api_key)
+        self._client = OpenRouter(
+            api_key=api_key,
+        )
 
     def get_chat_response(self, message: str) -> str:
         response = self._client.chat.send(
             model=self._model,
-            x_open_router_title="A.R.T.I.S.T.",
             messages=[
                 {"role": "system", "content": self._system_prompt},
                 {"role": "user", "content": message},

@@ -34,6 +34,21 @@ logger = logging.getLogger(get_logger_name())
 
 
 @dataclass
+class CharacterConfig:
+    """
+    Per-character settings for a chat character role.
+    """
+
+    service: str
+    model: str
+    system_prompt: str
+    options: dict = field(default_factory=dict)
+    base_prompt: str = ""
+    llm_base_prompt: str = ""
+    clip_base_prompt: str = ""
+
+
+@dataclass
 class ButtonConfig:
     """
     Game controller button mappings for the check_for_event function.
@@ -74,24 +89,10 @@ class AppConfig:
     All configuration values loaded from the config file and environment variables.
     """
 
-    # AI service
-    chat_service: str
-
-    # LLM - artist / daydream
-    artist_chat_model: str
-    artist_system_prompt: str
-    artist_base_prompt: str
-
-    # LLM - poet
-    poet_chat_model: str
-    poet_system_prompt: str
-    verse_base_prompt: str
-
-    # LLM - visionary (interprets the poem into an image prompt optimized for image models)
-    visionary_chat_model: str
-    visionary_system_prompt: str
-    llm_visionary_base_prompt: str
-    clip_visionary_base_prompt: str
+    # Chat characters
+    artist: CharacterConfig
+    poet: CharacterConfig
+    visionary: CharacterConfig
 
     # Image generation
     image_model: str
@@ -179,8 +180,7 @@ class AppConfig:
     # Optional fields with defaults
     num_verses: int = 3
     use_critic: bool = False
-    critic_chat_model: str | None = None
-    critic_system_prompt: str | None = None
+    critic: CharacterConfig | None = None
     user_prompt_enhancement_type: str | None = None
     daydream_prompt_enhancement_type: str | None = None
     sdxl_steps: int | None = None
@@ -190,27 +190,19 @@ class AppConfig:
     sd3_model: str | None = None
     num_user_prompts_for_emotions: int = 5
     enable_emotion_chip: bool = False
-    emotion_chip_chat_model: str | None = None
-    emotion_chip_system_prompt: str | None = None
-    emotion_chip_base_prompt: str | None = None
+    emotion_chip: CharacterConfig | None = None
     emotion_drift_interval: int = 3
     anthropic_api_key: str | None = None
     stability_ai_api_key: str | None = None
     openrouter_api_key: str | None = None
     fal_api_key: str | None = None
     dynamic_speech_lines: bool = False
-    raconteur_chat_model: str | None = None
-    raconteur_system_prompt: str | None = None
-    raconteur_base_prompt: str | None = None
+    raconteur: CharacterConfig | None = None
     enable_daydream_topics: bool = True
+    archivist: CharacterConfig | None = None
+    daydream_topic_repeat_limit: int = 3
     disk_space_warn_pct: float = 10.0
     disk_space_target_pct: float = 20.0
-    archivist_chat_model: str = "claude-haiku-4-5"
-    archivist_system_prompt: str = ""
-    daydream_topic_repeat_limit: int = 3
-    openrouter_options: dict = field(default_factory=dict)
-    openai_options: dict = field(default_factory=dict)
-    anthropic_options: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -236,6 +228,23 @@ class AppState:
     pending_daydream_topics: dict | None = None
 
 
+def _parse_character_config(data: dict, name: str) -> CharacterConfig | None:
+    """Parse a character config dict, returning None and printing an error if required keys are missing."""
+    for key in ("service", "model", "system_prompt"):
+        if key not in data:
+            print(f"Missing required key '{key}' in character config '{name}'.")
+            return None
+    return CharacterConfig(
+        service=data["service"],
+        model=data["model"],
+        system_prompt=data["system_prompt"],
+        options=data.get("options", {}),
+        base_prompt=data.get("base_prompt", ""),
+        llm_base_prompt=data.get("llm_base_prompt", ""),
+        clip_base_prompt=data.get("clip_base_prompt", ""),
+    )
+
+
 def load_config(path: str) -> AppConfig | None:
     """
     Load, validate, and return configuration from a JSON file and environment variables.
@@ -248,9 +257,11 @@ def load_config(path: str) -> AppConfig | None:
         return None
 
     required_keys = [
+        "artist",
+        "poet",
+        "visionary",
         "image_model",
         "daydream_image_model",
-        "chat_service",
         "output_dir",
         "recents_file_name",
         "file_name_length",
@@ -281,16 +292,6 @@ def load_config(path: str) -> AppConfig | None:
         "speech_gender",
         "speech_voice",
         "speech_cache_dir",
-        "artist_chat_model",
-        "artist_system_prompt",
-        "artist_base_prompt",
-        "poet_chat_model",
-        "poet_system_prompt",
-        "verse_base_prompt",
-        "visionary_chat_model",
-        "visionary_system_prompt",
-        "llm_visionary_base_prompt",
-        "clip_visionary_base_prompt",
         "min_daydream_time",
         "max_daydream_time",
         "daydream_start_hour",
@@ -327,6 +328,43 @@ def load_config(path: str) -> AppConfig | None:
         print(f"Missing required config keys: {', '.join(missing_keys)}")
         return None
 
+    # Parse required character configs
+    artist_cfg = _parse_character_config(config["artist"], "artist")
+    poet_cfg = _parse_character_config(config["poet"], "poet")
+    visionary_cfg = _parse_character_config(config["visionary"], "visionary")
+    if not artist_cfg or not poet_cfg or not visionary_cfg:
+        return None
+
+    # Parse optional character configs
+    critic_cfg = None
+    if "critic" in config:
+        critic_cfg = _parse_character_config(config["critic"], "critic")
+        if not critic_cfg:
+            return None
+
+    emotion_chip_cfg = None
+    if "emotion_chip" in config:
+        emotion_chip_cfg = _parse_character_config(config["emotion_chip"], "emotion_chip")
+        if not emotion_chip_cfg:
+            return None
+
+    raconteur_cfg = None
+    if "raconteur" in config:
+        raconteur_cfg = _parse_character_config(config["raconteur"], "raconteur")
+        if not raconteur_cfg:
+            return None
+
+    archivist_cfg = None
+    if "archivist" in config:
+        archivist_cfg = _parse_character_config(config["archivist"], "archivist")
+        if not archivist_cfg:
+            return None
+
+    # Collect all services in use to determine which API keys are required
+    all_chars = [c for c in [artist_cfg, poet_cfg, visionary_cfg, critic_cfg,
+                              emotion_chip_cfg, raconteur_cfg, archivist_cfg] if c]
+    services_in_use = {c.service for c in all_chars}
+
     try:
         openai_api_key = os.environ["OPENAI_API_KEY"]
     except KeyError:
@@ -344,16 +382,14 @@ def load_config(path: str) -> AppConfig | None:
         return None
 
     anthropic_api_key = None
-    if config["chat_service"] == "anthropic":
+    if "anthropic" in services_in_use:
         anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
         if anthropic_api_key is None:
-            print(
-                "Please set ANTHROPIC_API_KEY environment variable for Anthropic API key."
-            )
+            print("Please set ANTHROPIC_API_KEY environment variable for Anthropic API key.")
             return None
 
     openrouter_api_key = None
-    if config["chat_service"] == "openrouter":
+    if "openrouter" in services_in_use:
         openrouter_api_key = os.environ.get("OPENROUTER_API_KEY")
         if openrouter_api_key is None:
             print("Please set OPENROUTER_API_KEY environment variable for OpenRouter API key.")
@@ -386,27 +422,18 @@ def load_config(path: str) -> AppConfig | None:
         return None
 
     return AppConfig(
-        chat_service=config["chat_service"],
-        artist_chat_model=config["artist_chat_model"],
-        artist_system_prompt=config["artist_system_prompt"],
-        artist_base_prompt=config["artist_base_prompt"],
-        poet_chat_model=config["poet_chat_model"],
-        poet_system_prompt=config["poet_system_prompt"],
-        verse_base_prompt=config["verse_base_prompt"],
+        artist=artist_cfg,
+        poet=poet_cfg,
+        visionary=visionary_cfg,
         num_verses=config.get("num_verses", 3),
         use_critic=config.get("use_critic", False),
-        critic_chat_model=config.get("critic_chat_model"),
-        critic_system_prompt=config.get("critic_system_prompt"),
+        critic=critic_cfg,
         image_model=config["image_model"],
         daydream_image_model=config["daydream_image_model"],
         img_width=config["img_width"],
         img_height=config["img_height"],
-        visionary_chat_model=config["visionary_chat_model"],
-        visionary_system_prompt=config["visionary_system_prompt"],
         user_prompt_enhancement_type=config.get("user_prompt_enhancement_type"),
         daydream_prompt_enhancement_type=config.get("daydream_prompt_enhancement_type"),
-        llm_visionary_base_prompt=config["llm_visionary_base_prompt"],
-        clip_visionary_base_prompt=config["clip_visionary_base_prompt"],
         sdxl_steps=config.get("sdxl_steps"),
         sdxl_cfg_scale=config.get("sdxl_cfg_scale"),
         gptimage1_quality=config.get("gptimage1_quality"),
@@ -444,9 +471,7 @@ def load_config(path: str) -> AppConfig | None:
         num_recents_for_daydream=config["num_recents_for_daydream"],
         num_user_prompts_for_emotions=config.get("num_user_prompts_for_emotions", 5),
         enable_emotion_chip=config.get("enable_emotion_chip", False),
-        emotion_chip_chat_model=config.get("emotion_chip_chat_model"),
-        emotion_chip_system_prompt=config.get("emotion_chip_system_prompt"),
-        emotion_chip_base_prompt=config.get("emotion_chip_base_prompt"),
+        emotion_chip=emotion_chip_cfg,
         emotion_drift_interval=config.get("emotion_drift_interval", 3),
         min_daydream_time=config["min_daydream_time"] * 60,
         max_daydream_time=config["max_daydream_time"] * 60,
@@ -476,15 +501,12 @@ def load_config(path: str) -> AppConfig | None:
         failed_lines=config["failed_lines"],
         daydream_refusal_lines=config["daydream_refusal_lines"],
         dynamic_speech_lines=config.get("dynamic_speech_lines", False),
-        raconteur_chat_model=config.get("raconteur_chat_model"),
-        raconteur_system_prompt=config.get("raconteur_system_prompt"),
-        raconteur_base_prompt=config.get("raconteur_base_prompt"),
+        raconteur=raconteur_cfg,
         enable_daydream_topics=config.get("enable_daydream_topics", True),
+        archivist=archivist_cfg,
+        daydream_topic_repeat_limit=config.get("daydream_topic_repeat_limit", 3),
         disk_space_warn_pct=config.get("disk_space_warn_percentage", 10.0),
         disk_space_target_pct=config.get("disk_space_target_percentage", 20.0),
-        archivist_chat_model=config.get("archivist_chat_model", "claude-haiku-4-5"),
-        archivist_system_prompt=config.get("archivist_system_prompt", ""),
-        daydream_topic_repeat_limit=config.get("daydream_topic_repeat_limit", 3),
         openai_api_key=openai_api_key,
         azure_speech_region=azure_speech_region,
         azure_speech_key=azure_speech_key,
@@ -493,7 +515,4 @@ def load_config(path: str) -> AppConfig | None:
         stability_ai_api_key=stability_ai_api_key,
         openrouter_api_key=openrouter_api_key,
         fal_api_key=fal_api_key,
-        openrouter_options=config.get("openrouter_options", {}),
-        openai_options=config.get("openai_options", {}),
-        anthropic_options=config.get("anthropic_options", {}),
     )

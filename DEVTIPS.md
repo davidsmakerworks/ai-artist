@@ -42,6 +42,8 @@ Three backends are available via `chat_service` in `config.json`. All live in `a
 
 `OpenRouterChatCharacter` uses the native OpenRouter SDK (`openrouter.chat.send`). The model string is passed through verbatim (e.g. `"deepseek/deepseek-v4-5"`), so any model available on OpenRouter can be used by changing `config.json` alone. Requires `OPENROUTER_API_KEY`.
 
+All three constructors accept an optional `provider_options: dict | None = None`. The dict is splatted into the API call as extra keyword arguments. `create_chat_character()` in `main.py` also accepts `provider_options`; if not passed it falls back to the global `openrouter_options` / `openai_options` / `anthropic_options` dict from `AppConfig` (loaded from `config.json`). This is the correct way to pass provider-specific parameters such as `reasoning` effort, `temperature`, or `top_p` without touching the character classes.
+
 ---
 
 ## The Critic's Fragile Number Parser
@@ -166,7 +168,9 @@ If the output directory runs out of deletable files before the target is reached
 
 ### Ideas from Code Review
 
-**Per-character LLM backend** — the single `chat_service` key forces all characters to use the same provider (OpenAI, Anthropic, or OpenRouter). A dict like `{ "poet": "anthropic", "visionary": "openrouter" }` would let you mix providers per role. Note that OpenRouter already lets you mix model tiers within a single `chat_service`, so this matters most when you want to mix native Anthropic/OpenAI APIs with OpenRouter.
+**Per-character LLM backend** — the single `chat_service` key forces all characters to use the same provider (OpenAI, Anthropic, or OpenRouter). A dict like `{ "poet": "anthropic", "visionary": "openrouter" }` would let you mix providers per role. Note that OpenRouter already lets you mix model tiers within a single `chat_service`, so this matters most when you want to mix native Anthropic/OpenAI APIs with OpenRouter. (`provider_options` already gives per-call kwargs but not per-character provider switching.)
+
+**Per-character provider options** — `openrouter_options` / `openai_options` / `anthropic_options` in `config.json` apply globally to every character. To pass different options per character (e.g. high reasoning effort only for the visionary), pass `provider_options` explicitly to `create_chat_character()` at each call site in `main.py`.
 
 **Non-blocking pipeline** — the entire creation pipeline runs on the main thread, blocking input for 10–30+ seconds. A `threading.Thread` for the pipeline would allow ESC to abort a running generation. The main challenge is thread-safe pygame surface updates.
 

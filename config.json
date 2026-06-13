@@ -19,6 +19,9 @@
     "speech_voice": "en-US-CoraNeural",
 
     "chat_service": "openrouter",
+    "openai_options": {},
+    "anthropic_options": {},
+    "openrouter_options": { "reasoning": { "effort": "low" } },
     "artist_chat_model": "deepseek/deepseek-v4-pro",
     "poet_chat_model": "deepseek/deepseek-v4-pro",
     "critic_chat_model": "deepseek/deepseek-v4-flash",

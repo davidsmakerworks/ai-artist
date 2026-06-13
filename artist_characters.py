@@ -40,9 +40,11 @@ class OpenAIChatCharacter:
         system_prompt: str,
         model: str,
         api_key: str,
+        provider_options: dict | None = None,
     ) -> None:
         self._system_prompt = system_prompt
         self._model = model
+        self._provider_options = provider_options or {}
 
         self._openai_client = OpenAI()
         self._openai_client.api_key = api_key
@@ -56,6 +58,7 @@ class OpenAIChatCharacter:
         response = self._openai_client.chat.completions.create(
             model=self._model,
             messages=messages,
+            **self._provider_options,
         )
 
         return response.choices[0].message.content or ""
@@ -67,9 +70,11 @@ class ClaudeChatCharacter:
         system_prompt: str,
         model: str,
         api_key: str,
+        provider_options: dict | None = None,
     ) -> None:
         self._system_prompt = system_prompt
         self._model = model
+        self._provider_options = provider_options or {}
 
         self._anthropic_client = Anthropic(api_key=api_key)
 
@@ -79,6 +84,7 @@ class ClaudeChatCharacter:
             model=self._model,
             system=self._system_prompt,
             messages=[{"role": "user", "content": message}],
+            **self._provider_options,
         )
 
         content = response.content[0]
@@ -92,9 +98,11 @@ class OpenRouterChatCharacter:
         system_prompt: str,
         model: str,
         api_key: str,
+        provider_options: dict | None = None,
     ) -> None:
         self._system_prompt = system_prompt
         self._model = model
+        self._provider_options = provider_options or {}
 
         self._client = OpenRouter(api_key=api_key)
 
@@ -106,6 +114,7 @@ class OpenRouterChatCharacter:
                 {"role": "system", "content": self._system_prompt},
                 {"role": "user", "content": message},
             ],
+            **self._provider_options,
         )
 
         return str(response.choices[0].message.content)

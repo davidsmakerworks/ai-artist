@@ -10,7 +10,8 @@ supported.
 - OpenAI GPT Image 1, Stability AI SDXL, Stability AI Stable Image, or Fal.ai to generate images
 - OpenAI GPT Chat Completion, Anthropic Claude, or OpenRouter (native SDK) to generate
 verses and daydream image prompts, and to choose the best verse from multiple options if
-the critic is enabled.
+the critic is enabled. Provider-specific API options (e.g. reasoning effort) are
+configurable per-provider in `config.json`.
 - OpenAI Whisper API to transcribe speech.
 - Azure Speech API to convert text to speech
 - Azure Blob Storage to store downloadable images

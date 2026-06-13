@@ -1248,6 +1248,7 @@ def create_chat_character(
     system_prompt: str,
     model: str,
     cfg: AppConfig,
+    provider_options: dict | None = None,
 ):
     """
     Factory function to create a chat character using the configured chat service.
@@ -1257,18 +1258,21 @@ def create_chat_character(
             system_prompt=system_prompt,
             model=model,
             api_key=cfg.anthropic_api_key,
+            provider_options=provider_options or cfg.anthropic_options,
         )
     elif cfg.chat_service == "openai":
         return OpenAIChatCharacter(
             system_prompt=system_prompt,
             model=model,
             api_key=cfg.openai_api_key,
+            provider_options=provider_options or cfg.openai_options,
         )
     elif cfg.chat_service == "openrouter":
         return OpenRouterChatCharacter(
             system_prompt=system_prompt,
             model=model,
             api_key=cfg.openrouter_api_key,
+            provider_options=provider_options or cfg.openrouter_options,
         )
     else:
         raise ValueError(f"Unknown chat service: {cfg.chat_service}")

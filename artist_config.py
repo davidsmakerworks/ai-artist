@@ -208,6 +208,9 @@ class AppConfig:
     archivist_chat_model: str = "claude-haiku-4-5"
     archivist_system_prompt: str = ""
     daydream_topic_repeat_limit: int = 3
+    openrouter_options: dict = field(default_factory=dict)
+    openai_options: dict = field(default_factory=dict)
+    anthropic_options: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -490,4 +493,7 @@ def load_config(path: str) -> AppConfig | None:
         stability_ai_api_key=stability_ai_api_key,
         openrouter_api_key=openrouter_api_key,
         fal_api_key=fal_api_key,
+        openrouter_options=config.get("openrouter_options", {}),
+        openai_options=config.get("openai_options", {}),
+        anthropic_options=config.get("anthropic_options", {}),
     )

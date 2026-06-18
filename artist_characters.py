@@ -61,7 +61,11 @@ class OpenAIChatCharacter:
             **self._provider_options,
         )
 
-        return response.choices[0].message.content or ""
+        if response.choices[0].message.content:
+            return response.choices[0].message.content
+        else:
+            logger.error("No content in response from OpenAI chat completion.")
+            raise RuntimeError("No content in response from OpenAI chat completion.")
 
 
 class ClaudeChatCharacter:
@@ -89,7 +93,12 @@ class ClaudeChatCharacter:
 
         content = response.content[0]
         assert isinstance(content, TextBlock)
-        return content.text
+
+        if content.text:
+            return content.text
+        else:
+            logger.error("No content in response from Claude chat completion.")
+            raise RuntimeError("No content in response from Claude chat completion.")
 
 
 class OpenRouterChatCharacter:
@@ -118,4 +127,8 @@ class OpenRouterChatCharacter:
             **self._provider_options,
         )
 
-        return str(response.choices[0].message.content)
+        if response.choices[0].message.content:
+            return str(response.choices[0].message.content)
+        else:
+            logger.error("No content in response from OpenRouter chat completion.")
+            raise RuntimeError("No content in response from OpenRouter chat completion.")

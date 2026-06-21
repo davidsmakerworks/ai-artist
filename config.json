@@ -14,9 +14,11 @@
     "max_recording_time": 10,
     "transcriber_model": "whisper-1",
 
+    "speech_service": "openrouter",
+    "speech_model": "hexgrad/kokoro-82m",
     "speech_language": "en-US",
     "speech_gender": "Female",
-    "speech_voice": "en-US-CoraNeural",
+    "speech_voice": "bf_lily",
 
     "artist": {
         "service": "openrouter",

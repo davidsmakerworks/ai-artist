@@ -124,8 +124,6 @@ class AppConfig:
     input_sample_rate: int
     max_recording_time: int
     transcriber_model: str
-    speech_language: str
-    speech_gender: str
     speech_voice: str
     speech_cache_dir: str
 
@@ -173,11 +171,15 @@ class AppConfig:
 
     # API keys (from environment variables)
     openai_api_key: str
-    azure_speech_region: str
-    azure_speech_key: str
     azure_storage_key: str
 
     # Optional fields with defaults
+    speech_service: str = "azure"
+    speech_model: str | None = None
+    speech_language: str = "en-US"
+    speech_gender: str = "Female"
+    azure_speech_region: str | None = None
+    azure_speech_key: str | None = None
     num_verses: int = 3
     use_critic: bool = False
     critic: CharacterConfig | None = None
@@ -288,8 +290,6 @@ def load_config(path: str) -> AppConfig | None:
         "prompt_font_size",
         "qr_display_time",
         "prompt_display_time",
-        "speech_language",
-        "speech_gender",
         "speech_voice",
         "speech_cache_dir",
         "min_daydream_time",
@@ -372,14 +372,21 @@ def load_config(path: str) -> AppConfig | None:
         return None
 
     try:
-        azure_speech_region = os.environ["AZURE_SPEECH_REGION"]
-        azure_speech_key = os.environ["AZURE_SPEECH_KEY"]
         azure_storage_key = os.environ["AZURE_STORAGE_KEY"]
     except KeyError:
-        print(
-            "Please set environment variables for Azure API keys: AZURE_SPEECH_REGION, AZURE_SPEECH_KEY, AZURE_STORAGE_KEY."
-        )
+        print("Please set AZURE_STORAGE_KEY environment variable.")
         return None
+
+    speech_service = config.get("speech_service", "azure")
+    azure_speech_region = None
+    azure_speech_key = None
+    if speech_service == "azure":
+        try:
+            azure_speech_region = os.environ["AZURE_SPEECH_REGION"]
+            azure_speech_key = os.environ["AZURE_SPEECH_KEY"]
+        except KeyError:
+            print("Please set AZURE_SPEECH_REGION and AZURE_SPEECH_KEY environment variables.")
+            return None
 
     anthropic_api_key = None
     if "anthropic" in services_in_use:
@@ -389,7 +396,7 @@ def load_config(path: str) -> AppConfig | None:
             return None
 
     openrouter_api_key = None
-    if "openrouter" in services_in_use:
+    if "openrouter" in services_in_use or speech_service == "openrouter":
         openrouter_api_key = os.environ.get("OPENROUTER_API_KEY")
         if openrouter_api_key is None:
             print("Please set OPENROUTER_API_KEY environment variable for OpenRouter API key.")
@@ -457,8 +464,10 @@ def load_config(path: str) -> AppConfig | None:
         input_sample_rate=config["input_sample_rate"],
         max_recording_time=config["max_recording_time"],
         transcriber_model=config["transcriber_model"],
-        speech_language=config["speech_language"],
-        speech_gender=config["speech_gender"],
+        speech_service=config.get("speech_service", "azure"),
+        speech_model=config.get("speech_model"),
+        speech_language=config.get("speech_language", "en-US"),
+        speech_gender=config.get("speech_gender", "Female"),
         speech_voice=config["speech_voice"],
         speech_cache_dir=config["speech_cache_dir"],
         output_dir=config["output_dir"],

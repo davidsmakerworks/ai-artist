@@ -75,7 +75,7 @@ from artist_painters import (
     StableImageCreator,
 )
 from artist_moderator import ArtistModerator
-from artist_speech import ArtistSpeech
+from artist_speech import ArtistSpeech, OpenRouterSpeech
 from artist_storage import ArtistStorage
 from audio_tools import AudioRecorder
 from log_config import create_global_logger
@@ -316,7 +316,7 @@ def save_recents(
 def wait_for_action(
     cfg: AppConfig,
     button_config: ButtonConfig,
-    speech_svc: ArtistSpeech,
+    speech_svc: ArtistSpeech | OpenRouterSpeech,
     disp_surface: pygame.Surface,
     artist_canvas: ArtistCanvas,
     state: AppState,
@@ -468,7 +468,7 @@ def wait_for_action(
 
 def capture_user_audio(
     cfg: AppConfig,
-    speech_svc: ArtistSpeech,
+    speech_svc: ArtistSpeech | OpenRouterSpeech,
     audio_recorder: AudioRecorder,
     transcriber: Transcriber,
     disp_surface: pygame.Surface,
@@ -563,7 +563,7 @@ def generate_daydream_prompt(
     state: AppState,
     ai_artist,
     archivist,
-    speech_svc: ArtistSpeech,
+    speech_svc: ArtistSpeech | OpenRouterSpeech,
     user_action: UserAction | None,
     disp_surface: pygame.Surface,
     status_screen: StatusScreen,
@@ -731,7 +731,7 @@ def render_creation_display(
     state: AppState,
     verse: str,
     img_bytes: bytes,
-    speech_svc: ArtistSpeech,
+    speech_svc: ArtistSpeech | OpenRouterSpeech,
     user_action: UserAction | None,
     artist_canvas: ArtistCanvas,
     disp_surface: pygame.Surface,
@@ -969,7 +969,7 @@ def generate_speech_line_buffer(
     cfg: AppConfig,
     state: AppState,
     raconteur,
-    speech_svc: ArtistSpeech,
+    speech_svc: ArtistSpeech | OpenRouterSpeech,
 ) -> None:
     """
     Use the raconteur character to generate speech lines for any empty buffer
@@ -1031,7 +1031,7 @@ def generate_speech_line_buffer(
 def speak_buffered_line(
     cfg: AppConfig,
     state: AppState,
-    speech_svc: ArtistSpeech,
+    speech_svc: ArtistSpeech | OpenRouterSpeech,
     category: str,
     fallback: list,
 ) -> None:
@@ -1049,7 +1049,7 @@ def speak_buffered_line(
 def handle_creation_failure(
     cfg: AppConfig,
     state: AppState,
-    speech_svc: ArtistSpeech,
+    speech_svc: ArtistSpeech | OpenRouterSpeech,
     disp_surface: pygame.Surface,
     status_screen: StatusScreen,
 ) -> None:
@@ -1067,7 +1067,7 @@ def handle_creation_failure(
 def run_creation_pipeline(
     user_action: UserAction | None,
     cfg: AppConfig,
-    speech_svc: ArtistSpeech,
+    speech_svc: ArtistSpeech | OpenRouterSpeech,
     audio_recorder: AudioRecorder,
     transcriber: Transcriber,
     ai_artist,
@@ -1319,14 +1319,24 @@ def main() -> None:
 
 
     logger.debug("Initializing speech...")
-    speech_svc = ArtistSpeech(
-        subscription_key=cfg.azure_speech_key,
-        region=cfg.azure_speech_region,
-        language=cfg.speech_language,
-        gender=cfg.speech_gender,
-        voice=cfg.speech_voice,
-        cache_dir=cfg.speech_cache_dir,
-    )
+    if cfg.speech_service == "openrouter":
+        assert cfg.openrouter_api_key and cfg.speech_model
+        speech_svc: ArtistSpeech | OpenRouterSpeech = OpenRouterSpeech(
+            api_key=cfg.openrouter_api_key,
+            model=cfg.speech_model,
+            voice=cfg.speech_voice,
+            cache_dir=cfg.speech_cache_dir,
+        )
+    else:
+        assert cfg.azure_speech_key and cfg.azure_speech_region
+        speech_svc = ArtistSpeech(
+            subscription_key=cfg.azure_speech_key,
+            region=cfg.azure_speech_region,
+            language=cfg.speech_language,
+            gender=cfg.speech_gender,
+            voice=cfg.speech_voice,
+            cache_dir=cfg.speech_cache_dir,
+        )
 
     logger.debug("Initializing storage...")
     storage = ArtistStorage(

@@ -79,9 +79,28 @@ This works well when the critic responds "Poem 1 is the best choice." It breaks 
 
 ---
 
+## Two Speech Backends
+
+`speech_service` in `config.json` selects the backend — `"azure"` (default) or `"openrouter"`.
+
+**`ArtistSpeech` (Azure)** — output format `Riff16Khz16BitMonoPcm`: a RIFF/WAV container at 16 kHz. The bytes returned by the Azure SDK include a WAV header. Every playback path strips that header via `wave.open()` / `readframes()` before handing raw PCM to `AudioPlayer`. Cache files use `.wav`. `synthesize_text()` returns WAV bytes (header included).
+
+**`OpenRouterSpeech`** — `response_format="pcm"` requests headerless raw PCM at 24 kHz. Bytes go straight to `AudioPlayer` with no parsing step. Cache files use `.pcm`. `synthesize_text()` returns raw PCM bytes (no header).
+
+The two `synthesize_text()` methods are therefore **not format-compatible** — Azure bytes include a WAV header, OpenRouter bytes do not. Each class's own `play_audio()` handles its own format correctly, but you cannot mix them (e.g. pass Azure output to `OpenRouterSpeech.play_audio()`).
+
+`speech_service: "openrouter"` requires `speech_model` to also be set in `config.json`; Azure does not use `speech_model` but requires `speech_language` and `speech_gender`.
+
+---
+
 ## Speech Caching Key
 
-The cache key is SHA256 of `language + gender + voice + text` ([artist_speech.py:133](artist_speech.py#L133)). If you change the voice or language in `config.json`, all cached files become unreachable (they won't be replayed, new files will be generated). The old files aren't deleted. You'll want to clear `cache/` after a voice change to avoid stale accumulation.
+Cache keys differ by backend:
+
+- **Azure** — SHA256 of `language + gender + voice + text` ([artist_speech.py:134](artist_speech.py#L134)). Change the voice, language, or gender and all cached `.wav` files become unreachable.
+- **OpenRouter** — SHA256 of `model + voice + text` ([artist_speech.py:207](artist_speech.py#L207)). Change the model or voice and all cached `.pcm` files become unreachable.
+
+In both cases the old files are not deleted automatically. Clear `cache/` after changing voice parameters to avoid stale accumulation.
 
 ---
 

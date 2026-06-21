@@ -28,6 +28,7 @@ import wave
 import xml.etree.ElementTree as ET
 
 import azure.cognitiveservices.speech as speechsdk
+from openrouter import OpenRouter
 
 from audio_tools import AudioPlayer
 from log_config import get_logger_name
@@ -169,3 +170,56 @@ class ArtistSpeech:
         wav_data = io.BytesIO(audio_data)
         with wave.open(wav_data, "rb") as virtual_file:
             self._player.play(virtual_file.readframes(virtual_file.getnframes()))
+
+
+class OpenRouterSpeech:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        voice: str,
+        cache_dir: str,
+        channels: int = 1,
+        sample_rate: int = 24000,
+        sample_width: int = 2,
+    ) -> None:
+        self._api_key = api_key
+        self._model = model
+        self._cache_dir = cache_dir
+        self.voice = voice
+
+        self._player = AudioPlayer(
+            sample_width=sample_width, channels=channels, rate=sample_rate
+        )
+
+    def _synthesize(self, text: str) -> bytes:
+        with OpenRouter(api_key=self._api_key) as client:
+            response = client.tts.create_speech(
+                input=text,
+                model=self._model,
+                voice=self.voice,
+                response_format="pcm",
+            )
+            return response.read()
+
+    def speak_text(self, text: str, use_cache: bool = True) -> None:
+        if use_cache:
+            cache_key = self._model + self.voice + text
+            cache_hash = hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
+            cached_file_path = os.path.join(self._cache_dir, cache_hash + ".pcm")
+
+            if not os.path.exists(cached_file_path):
+                audio_data = self._synthesize(text)
+                with open(cached_file_path, "wb") as f:
+                    f.write(audio_data)
+
+            with open(cached_file_path, "rb") as f:
+                self._player.play(f.read())
+        else:
+            self._player.play(self._synthesize(text))
+
+    def synthesize_text(self, text: str) -> bytes:
+        return self._synthesize(text)
+
+    def play_audio(self, audio_data: bytes) -> None:
+        self._player.play(audio_data)

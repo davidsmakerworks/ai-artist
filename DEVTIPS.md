@@ -20,6 +20,28 @@ The two factories are the single point where you'd add a new image model or LLM 
 
 ---
 
+## Local Config Override (`config-local.json`)
+
+`load_config()` in `artist_config.py` accepts an optional `local_path` parameter (wired to `--local-config` in `main.py`). When not supplied, it looks for `config-local.json` in the same directory as the base config file.
+
+**Merge behavior** — `_deep_merge(base, override)` is a recursive dict merge: scalars and lists in the override replace the base value wholesale; dicts are merged recursively. This means you can override a single field inside a character config without repeating the whole block:
+
+```json
+{
+  "poet": { "model": "claude-opus-4-8" }
+}
+```
+
+Lists are replaced entirely, not appended — a `welcome_lines` entry in the local file replaces the full list from `config.json`.
+
+**Unknown-key warnings** — before merging, `_warn_unknown_local_keys()` walks the local dict and emits `logger.warning(...)` for any top-level key not in `_KNOWN_CONFIG_KEYS`, and any sub-key inside a character block not in `_KNOWN_CHARACTER_KEYS`. The unknown keys are still merged and will be silently ignored by the existing `AppConfig` constructor, but the warning makes typos visible in the log.
+
+**Missing file behavior** — if the default `config-local.json` path doesn't exist, it is silently skipped (normal operation). If `--local-config` is given explicitly and the path doesn't exist, `load_config()` returns `None` and startup aborts with a message — same treatment as a missing `--config` file.
+
+**`config-local.json` is gitignored** — use it for machine-specific overrides (model swaps, speech voice, local paths) that shouldn't be committed.
+
+---
+
 ## Environment Variable Loading
 
 API keys and other secrets are read from the environment. On startup, `main()` resolves which source to use, in priority order:

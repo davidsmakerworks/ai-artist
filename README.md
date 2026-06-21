@@ -29,6 +29,10 @@ provider-specific options in `config.json`.
 
 A Python virtual environment (venv) should be created to avoid conflicts with system packages.
 
+## Local configuration overrides
+
+A `config-local.json` file placed alongside `config.json` (or any path passed via `--local-config`) is deep-merged on top of the base config before the application starts. Use it for machine-specific settings (model choices, voices, paths) without modifying the checked-in `config.json`. Character sub-objects are merged recursively, so you can override a single field such as `"model"` inside `"poet"` without repeating the entire character block. Unknown keys are logged as warnings and ignored. `config-local.json` is gitignored by convention.
+
 ## Possible future enhancements
 - Improve error handling for any/all web requests
 - Add method to change microphone sensitivity/volume

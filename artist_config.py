@@ -247,15 +247,101 @@ def _parse_character_config(data: dict, name: str) -> CharacterConfig | None:
     )
 
 
-def load_config(path: str) -> AppConfig | None:
+_KNOWN_CONFIG_KEYS: set[str] = {
+    "artist", "poet", "visionary", "critic", "emotion_chip", "raconteur", "archivist",
+    "num_verses", "use_critic",
+    "image_model", "daydream_image_model", "img_width", "img_height",
+    "user_prompt_enhancement_type", "daydream_prompt_enhancement_type",
+    "sdxl_steps", "sdxl_cfg_scale", "gptimage1_quality", "stableimage_svc", "sd3_model",
+    "display_width", "display_height", "horiz_margin", "vert_margin",
+    "verse_font", "verse_font_size", "verse_line_spacing",
+    "status_font", "status_heading1_size", "status_heading2_size", "status_status_size",
+    "prompt_font", "prompt_font_size", "prompt_display_time", "qr_display_time",
+    "input_sample_rate", "max_recording_time", "transcriber_model",
+    "speech_service", "speech_model", "speech_language", "speech_gender",
+    "speech_voice", "speech_cache_dir",
+    "output_dir", "storage_account", "storage_container", "html_template",
+    "file_name_length", "recents_file_name", "max_recents", "num_recents_for_daydream",
+    "num_user_prompts_for_emotions", "enable_emotion_chip", "emotion_drift_interval",
+    "min_daydream_time", "max_daydream_time",
+    "daydream_start_hour", "daydream_end_hour", "daydream_iso_weekdays",
+    "manual_daydream_window", "manual_daydream_limit",
+    "generate_button", "daydream_button", "reveal_qr_button", "reveal_prompt_button",
+    "emotional_state_hold_button", "emotional_state_press_button",
+    "shutdown_hold_button", "shutdown_press_button",
+    "debug_hold_button", "debug_press_button", "debug_font", "debug_font_size", "debug_display_time",
+    "welcome_words", "welcome_lines", "daydream_lines", "working_lines",
+    "finished_lines", "failed_lines", "daydream_refusal_lines",
+    "dynamic_speech_lines", "enable_daydream_topics",
+    "daydream_topic_repeat_limit", "disk_space_warn_percentage", "disk_space_target_percentage",
+}
+
+_KNOWN_CHARACTER_KEYS: set[str] = {
+    "service", "model", "system_prompt", "options",
+    "base_prompt", "llm_base_prompt", "clip_base_prompt",
+}
+
+_CHARACTER_KEYS: set[str] = {
+    "artist", "poet", "visionary", "critic", "emotion_chip", "raconteur", "archivist",
+}
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Return a new dict that is `base` deep-merged with `override` (override wins)."""
+    result = dict(base)
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def _warn_unknown_local_keys(local: dict) -> None:
+    logger = logging.getLogger(get_logger_name())
+    for key in local:
+        if key in _CHARACTER_KEYS:
+            char_override = local[key]
+            if isinstance(char_override, dict):
+                for sub_key in char_override:
+                    if sub_key not in _KNOWN_CHARACTER_KEYS:
+                        logger.warning(
+                            "config-local: unknown key '%s.%s' — ignored", key, sub_key
+                        )
+        elif key not in _KNOWN_CONFIG_KEYS:
+            logger.warning("config-local: unknown key '%s' — ignored", key)
+
+
+def load_config(path: str, local_path: str | None = None) -> AppConfig | None:
     """
     Load, validate, and return configuration from a JSON file and environment variables.
+    If local_path is provided (or defaults to config-local.json next to path), that file
+    is deep-merged on top of the base config before validation.
     """
     try:
         with open(path, "r") as config_file:
             config = json.load(config_file)
     except FileNotFoundError:
         print(f"Config file not found: {path}")
+        return None
+
+    logger = logging.getLogger(get_logger_name())
+
+    resolved_local = local_path or os.path.join(
+        os.path.dirname(os.path.abspath(path)),
+        "config-local.json",
+    )
+    if os.path.isfile(resolved_local):
+        try:
+            with open(resolved_local, "r") as lf:
+                local_config = json.load(lf)
+            logger.info("Applying local config overrides from %s", resolved_local)
+            _warn_unknown_local_keys(local_config)
+            config = _deep_merge(config, local_config)
+        except json.JSONDecodeError as exc:
+            logger.error("Failed to parse %s: %s — local overrides skipped", resolved_local, exc)
+    elif local_path is not None:
+        print(f"Local config file not found: {local_path}")
         return None
 
     required_keys = [

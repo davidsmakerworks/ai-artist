@@ -8,6 +8,7 @@ cache/
 output/
 venv/
 
+config-local.json
 recents.json
 
 .vscode/

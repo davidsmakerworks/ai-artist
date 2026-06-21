@@ -1284,6 +1284,9 @@ def main() -> None:
     parser.add_argument(
         "--env-file", default=None, help="Path to .env file for environment variables"
     )
+    parser.add_argument(
+        "--local-config", default=None, help="Path to local config override file (default: config-local.json next to --config)"
+    )
     args = parser.parse_args()
 
     if args.env_file:
@@ -1293,7 +1296,7 @@ def main() -> None:
         if os.path.isfile(default_env):
             load_dotenv(dotenv_path=default_env, override=True)
 
-    cfg = load_config(args.config)
+    cfg = load_config(args.config, local_path=args.local_config)
     if cfg is None:
         return
 

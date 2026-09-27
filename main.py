@@ -494,7 +494,10 @@ def capture_user_audio(
         if valid_audio:
             audio_detected = True
             show_status_screen(
-                surface=disp_surface, text="Working...", status_screen_obj=status_screen
+                surface=disp_surface,
+                text="Working",
+                status_screen_obj=status_screen,
+                detail=cfg.status_steps.get("transcribing"),
             )
             speak_buffered_line(cfg, state, speech_svc, "working", cfg.working_lines)
             state.user_prompt = transcriber.transcribe(audio_stream=in_stream)
@@ -572,7 +575,10 @@ def generate_daydream_prompt(
     Generate an AI prompt from recent creations, storing the result in state.user_prompt.
     """
     show_status_screen(
-        surface=disp_surface, text="Daydreaming...", status_screen_obj=status_screen
+        surface=disp_surface,
+        text="Daydreaming",
+        status_screen_obj=status_screen,
+        detail=cfg.status_steps.get("imagining"),
     )
 
     # Only speak line if daydream is manually initiated
@@ -612,6 +618,12 @@ def generate_daydream_prompt(
 
     state.pending_daydream_topics = None
     if cfg.enable_daydream_topics and archivist is not None:
+        show_status_screen(
+            surface=disp_surface,
+            text="Daydreaming",
+            status_screen_obj=status_screen,
+            detail=cfg.status_steps.get("extracting_topics"),
+        )
         state.pending_daydream_topics = extract_daydream_topics(
             state.user_prompt, archivist
         )
@@ -1052,14 +1064,17 @@ def handle_creation_failure(
     speech_svc: ArtistSpeech | OpenRouterSpeech,
     disp_surface: pygame.Surface,
     status_screen: StatusScreen,
+    failure_phase: str | None = None,
 ) -> None:
     """
     Display the failure status screen and speak a failure line.
     """
+    detail = cfg.failure_reasons.get(failure_phase) if failure_phase else None
     show_status_screen(
         surface=disp_surface,
-        text="Creation failed!",
+        text="Creation failed",
         status_screen_obj=status_screen,
+        detail=detail,
     )
     speak_buffered_line(cfg, state, speech_svc, "failed", cfg.failed_lines)
 
@@ -1118,20 +1133,32 @@ def run_creation_pipeline(
     img_prompt = state.user_prompt
     state.previous_user_prompt = state.user_prompt
 
-    can_create = moderator.check_msg(msg=img_prompt)
-    creation_failed = False
+    status_label = "Daydreaming" if state.daydream else "Working"
 
-    if can_create:
-        if not state.daydream and cfg.enable_emotion_chip and state.emotional_state:
-            logger.info(f"Generating verse with emotional state: {state.emotional_state}")
-            verse_base_prompt = (
-                f"Your current emotional state is {state.emotional_state}. This emotional state should influence the style, tone and content of your response. "
-                + cfg.poet.base_prompt
-            )
-        else:
-            verse_base_prompt = None
+    if not state.daydream and cfg.enable_emotion_chip and state.emotional_state:
+        logger.info(f"Generating verse with emotional state: {state.emotional_state}")
+        verse_base_prompt = (
+            f"Your current emotional state is {state.emotional_state}. This emotional state should influence the style, tone and content of your response. "
+            + cfg.poet.base_prompt
+        )
+    else:
+        verse_base_prompt = None
+    show_status_screen(
+        surface=disp_surface,
+        text=status_label,
+        status_screen_obj=status_screen,
+        detail=cfg.status_steps.get("composing_verse"),
+    )
+    failure_phase: str | None = None
+    try:
         verse = generate_verse(cfg, poet, critic, state, base_prompt=verse_base_prompt)
+    except Exception as e:
+        logger.error("Error generating verse")
+        logger.exception(e)
+        verse = ""
+        failure_phase = "composing_verse"
 
+    if failure_phase is None:
         enhancement_type = (
             cfg.daydream_prompt_enhancement_type
             if state.daydream
@@ -1140,6 +1167,13 @@ def run_creation_pipeline(
         verse_log = verse.replace("\n", "/")
         logger.info(f"Poem (original): {verse_log}")
 
+        if enhancement_type in ("llm", "clip"):
+            show_status_screen(
+                surface=disp_surface,
+                text=status_label,
+                status_screen_obj=status_screen,
+                detail=cfg.status_steps.get("translating_vision"),
+            )
         if enhancement_type == "llm":
             img_prompt = build_visionary_prompt(visionary, cfg.visionary.llm_base_prompt, verse)
             logger.info(f"Prompt (enhanced, llm): {img_prompt}")
@@ -1150,6 +1184,24 @@ def run_creation_pipeline(
             img_prompt = verse
             logger.info(f"Prompt (unenhanced): {img_prompt}")
 
+        show_status_screen(
+            surface=disp_surface,
+            text=status_label,
+            status_screen_obj=status_screen,
+            detail=cfg.status_steps.get("moderating"),
+        )
+        # Moderate the actual content that will be shown/sent, not the raw pre-enhancement
+        # prompt: the poem and the final image prompt sent to the image model.
+        if not (moderator.check_msg(msg=verse) and moderator.check_msg(msg=img_prompt)):
+            failure_phase = "moderating"
+
+    if failure_phase is None:
+        show_status_screen(
+            surface=disp_surface,
+            text=status_label,
+            status_screen_obj=status_screen,
+            detail=cfg.status_steps.get("painting"),
+        )
         try:
             img_bytes = generate_image_with_prompt(
                 state, painter, daydream_painter, img_prompt
@@ -1157,9 +1209,9 @@ def run_creation_pipeline(
         except Exception as e:
             logger.error("Error generating image")
             logger.exception(e)
-            creation_failed = True
+            failure_phase = "painting"
 
-        if not creation_failed:
+        if failure_phase is None:
             img_side = render_creation_display(
                 cfg,
                 state,
@@ -1203,8 +1255,8 @@ def run_creation_pipeline(
                 disp_surface.blit(artist_canvas.surface, (0, 0))
                 pygame.display.update()
 
-    if not can_create or creation_failed:
-        handle_creation_failure(cfg, state, speech_svc, disp_surface, status_screen)
+    if failure_phase is not None:
+        handle_creation_failure(cfg, state, speech_svc, disp_surface, status_screen, failure_phase)
         if raconteur:
             generate_speech_line_buffer(cfg, state, raconteur, speech_svc)
 
@@ -1251,23 +1303,27 @@ def create_chat_character(char_cfg: CharacterConfig, cfg: AppConfig):
     """
     Factory function to create a chat character from its per-character config.
     """
+    system_prompt = char_cfg.system_prompt
+    if cfg.sfw_mode:
+        system_prompt = system_prompt + " " + cfg.sfw_safety_clause
+
     if char_cfg.service == "anthropic":
         return ClaudeChatCharacter(
-            system_prompt=char_cfg.system_prompt,
+            system_prompt=system_prompt,
             model=char_cfg.model,
             api_key=cfg.anthropic_api_key,
             provider_options=char_cfg.options,
         )
     elif char_cfg.service == "openai":
         return OpenAIChatCharacter(
-            system_prompt=char_cfg.system_prompt,
+            system_prompt=system_prompt,
             model=char_cfg.model,
             api_key=cfg.openai_api_key,
             provider_options=char_cfg.options,
         )
     elif char_cfg.service == "openrouter":
         return OpenRouterChatCharacter(
-            system_prompt=char_cfg.system_prompt,
+            system_prompt=system_prompt,
             model=char_cfg.model,
             api_key=cfg.openrouter_api_key,
             provider_options=char_cfg.options,
@@ -1442,6 +1498,7 @@ def main() -> None:
         heading1_size=cfg.status_heading1_size,
         heading2_size=cfg.status_heading2_size,
         status_size=cfg.status_status_size,
+        status_detail_size=cfg.status_detail_size,
         vert_margin=cfg.vert_margin,
     )
 

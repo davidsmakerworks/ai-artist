@@ -180,6 +180,7 @@ class StatusScreen:
         heading1_size: int,
         heading2_size: int,
         status_size: int,
+        status_detail_size: int,
         vert_margin: int,
     ) -> None:
         self._width = width
@@ -188,6 +189,7 @@ class StatusScreen:
         self._heading1_size = heading1_size
         self._heading2_size = heading2_size
         self._status_size = status_size
+        self._status_detail_size = status_detail_size
         self._vert_margin = vert_margin
 
         self._surface = pygame.Surface(size=(width, height))
@@ -196,7 +198,7 @@ class StatusScreen:
     def surface(self) -> pygame.Surface:
         return self._surface
 
-    def render_status(self, text: str) -> None:
+    def render_status(self, text: str, detail: str | None = None) -> None:
         self._surface.fill(pygame.Color("black"))
 
         font = pygame.font.SysFont(self._font_name, self._heading1_size)
@@ -221,6 +223,16 @@ class StatusScreen:
         text_surface = font.render(text, True, pygame.Color("white"))
         self._surface.blit(text_surface, (x_pos, y_pos))
 
+        if detail:
+            status_height = font.size(text)[1]
+            detail_font = pygame.font.SysFont(self._font_name, self._status_detail_size)
+            detail_x_pos = int(
+                self._surface.get_width() / 2 - detail_font.size(detail)[0] / 2
+            )
+            detail_y_pos = y_pos + status_height + int(self._status_detail_size / 2)
+            detail_surface = detail_font.render(detail, True, pygame.Color("white"))
+            self._surface.blit(detail_surface, (detail_x_pos, detail_y_pos))
+
 
 def update_display(
     display_surface: pygame.Surface, content_surface: pygame.Surface
@@ -230,9 +242,12 @@ def update_display(
 
 
 def show_status_screen(
-    surface: pygame.Surface, text: str, status_screen_obj: StatusScreen
+    surface: pygame.Surface,
+    text: str,
+    status_screen_obj: StatusScreen,
+    detail: str | None = None,
 ) -> None:
-    status_screen_obj.render_status(text)
+    status_screen_obj.render_status(text, detail)
     update_display(surface, status_screen_obj.surface)
 
 

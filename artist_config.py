@@ -112,6 +112,7 @@ class AppConfig:
     status_heading1_size: int
     status_heading2_size: int
     status_status_size: int
+    status_detail_size: int
     prompt_font: str
     prompt_font_size: int
     prompt_display_time: float
@@ -205,6 +206,10 @@ class AppConfig:
     daydream_topic_repeat_limit: int = 3
     disk_space_warn_pct: float = 10.0
     disk_space_target_pct: float = 20.0
+    sfw_mode: bool = True
+    sfw_safety_clause: str | None = None
+    status_steps: dict = field(default_factory=dict)
+    failure_reasons: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -274,6 +279,7 @@ _KNOWN_CONFIG_KEYS: set[str] = {
     "finished_lines", "failed_lines", "daydream_refusal_lines",
     "dynamic_speech_lines", "enable_daydream_topics",
     "daydream_topic_repeat_limit", "disk_space_warn_percentage", "disk_space_target_percentage",
+    "sfw_mode", "sfw_safety_clause", "status_detail_size", "status_steps", "failure_reasons",
 }
 
 _KNOWN_CHARACTER_KEYS: set[str] = {
@@ -372,6 +378,7 @@ def load_config(path: str, local_path: str | None = None) -> AppConfig | None:
         "status_heading1_size",
         "status_heading2_size",
         "status_status_size",
+        "status_detail_size",
         "prompt_font",
         "prompt_font_size",
         "qr_display_time",
@@ -514,6 +521,15 @@ def load_config(path: str, local_path: str | None = None) -> AppConfig | None:
         logger.error("img_width must equal img_height.")
         return None
 
+    sfw_mode = config.get("sfw_mode", True)
+    sfw_safety_clause = config.get("sfw_safety_clause")
+    if sfw_mode and not sfw_safety_clause:
+        print(
+            "sfw_mode is enabled but 'sfw_safety_clause' is missing or empty in config."
+        )
+        logger.error("sfw_mode is enabled but 'sfw_safety_clause' is missing or empty in config.")
+        return None
+
     return AppConfig(
         artist=artist_cfg,
         poet=poet_cfg,
@@ -543,6 +559,7 @@ def load_config(path: str, local_path: str | None = None) -> AppConfig | None:
         status_heading1_size=config["status_heading1_size"],
         status_heading2_size=config["status_heading2_size"],
         status_status_size=config["status_status_size"],
+        status_detail_size=config["status_detail_size"],
         prompt_font=config["prompt_font"],
         prompt_font_size=config["prompt_font_size"],
         prompt_display_time=config["prompt_display_time"],
@@ -602,6 +619,10 @@ def load_config(path: str, local_path: str | None = None) -> AppConfig | None:
         daydream_topic_repeat_limit=config.get("daydream_topic_repeat_limit", 3),
         disk_space_warn_pct=config.get("disk_space_warn_percentage", 10.0),
         disk_space_target_pct=config.get("disk_space_target_percentage", 20.0),
+        sfw_mode=sfw_mode,
+        sfw_safety_clause=sfw_safety_clause,
+        status_steps=config.get("status_steps", {}),
+        failure_reasons=config.get("failure_reasons", {}),
         openai_api_key=openai_api_key,
         azure_speech_region=azure_speech_region,
         azure_speech_key=azure_speech_key,

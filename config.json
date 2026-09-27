@@ -9,6 +9,9 @@
     "disk_space_warn_percentage": 10,
     "disk_space_target_percentage": 20,
 
+    "sfw_mode": true,
+    "sfw_safety_clause": "Depict only fully clothed figures in non-graphic, family-friendly scenes suitable for public display in an all-ages art installation.",
+
     "input_sample_rate": 8000,
     "output_sample_rate": 16000,
     "max_recording_time": 10,
@@ -134,6 +137,23 @@
     "status_heading1_size": 200,
     "status_heading2_size": 50,
     "status_status_size": 100,
+    "status_detail_size": 40,
+
+    "status_steps": {
+        "transcribing": "Turning your words into ink...",
+        "imagining": "Dreaming up a new idea...",
+        "extracting_topics": "Jotting down the themes...",
+        "composing_verse": "Composing a verse...",
+        "moderating": "Giving it a once-over...",
+        "translating_vision": "Sketching a vision from the verse...",
+        "painting": "Painting the scene..."
+    },
+
+    "failure_reasons": {
+        "composing_verse": "The poem got lost in thought!",
+        "moderating": "The moderator gave it a thumbs-down!",
+        "painting": "The paintbrush slipped!"
+    },
     "prompt_font": "arial",
     "prompt_font_size": 48,
     "debug_font": "arial",

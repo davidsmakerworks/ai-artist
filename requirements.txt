@@ -4,9 +4,9 @@ fal-client
 openrouter
 azure-cognitiveservices-speech
 azure-storage-blob
-pygame
+pygame-ce
 qrcode
 Pillow
-pyaudio
+sounddevice
 requests
 python-dotenv

@@ -25,12 +25,22 @@ import io
 import logging
 import wave
 
-import pyaudio
+import sounddevice as sd
 from openai import OpenAI
 
 from log_config import get_logger_name
 
 logger = logging.getLogger(get_logger_name())
+
+# Maps sample width in bytes to the sounddevice dtype string
+_DTYPES_BY_WIDTH = {1: "uint8", 2: "int16", 3: "int24", 4: "int32"}
+
+
+def _dtype_from_width(sample_width: int) -> str:
+    try:
+        return _DTYPES_BY_WIDTH[sample_width]
+    except KeyError:
+        raise ValueError(f"Unsupported sample width: {sample_width}") from None
 
 
 class Transcriber:
@@ -65,7 +75,7 @@ class Transcriber:
                 model=self.model, file=audio_data
             )
         except Exception as e:
-            logger.error(f"Transcriber response: {response}")
+            logger.error(f"Transcription request failed for model {self.model}")
             logger.exception(e)
             raise
 
@@ -80,34 +90,31 @@ class AudioPlayer:
     def __init__(
         self, sample_width: int = 2, channels: int = 2, rate: int = 44000
     ) -> None:
-        self._pyaudio = pyaudio.PyAudio()
-
         self.sample_width = sample_width
         self.channels = channels
         self.rate = rate
 
     @property
     def sample_width(self) -> int:
-        return pyaudio.get_sample_size(self._audio_format)
+        return self._sample_width
 
     @sample_width.setter
     def sample_width(self, sample_width: int) -> None:
-        self._audio_format = pyaudio.get_format_from_width(sample_width)
+        self._dtype = _dtype_from_width(sample_width)
+        self._sample_width = sample_width
 
     def play(self, audio_stream: bytes) -> None:
-        stream = self._pyaudio.open(
-            format=self._audio_format,
+        # Exiting the context waits for buffered audio to finish playing
+        with sd.RawOutputStream(
+            samplerate=self.rate,
             channels=self.channels,
-            rate=self.rate,
-            output=True,
-        )
-
-        stream.write(audio_stream)
-        stream.stop_stream()
-        stream.close()
+            dtype=self._dtype,
+        ) as stream:
+            stream.write(audio_stream)
 
     def terminate(self) -> None:
-        self._pyaudio.terminate()
+        # sounddevice manages PortAudio lifetime itself; kept for API compatibility
+        pass
 
 
 class AudioRecorder:
@@ -118,19 +125,18 @@ class AudioRecorder:
     def __init__(
         self, sample_width: int = 2, channels: int = 2, rate: int = 44000
     ) -> None:
-        self._pyaudio = pyaudio.PyAudio()
-
         self.sample_width = sample_width
         self.channels = channels
         self.rate = rate
 
     @property
     def sample_width(self) -> int:
-        return pyaudio.get_sample_size(self._audio_format)
+        return self._sample_width
 
     @sample_width.setter
     def sample_width(self, sample_width: int) -> None:
-        self._audio_format = pyaudio.get_format_from_width(sample_width)
+        self._dtype = _dtype_from_width(sample_width)
+        self._sample_width = sample_width
 
     def record(
         self,
@@ -159,12 +165,13 @@ class AudioRecorder:
         TODO: Trim pre-audio silence
         """
 
-        stream = self._pyaudio.open(
-            format=self._audio_format,
+        stream = sd.RawInputStream(
+            samplerate=self.rate,
             channels=self.channels,
-            rate=self.rate,
-            input=True,
+            dtype=self._dtype,
+            blocksize=chunk_size,
         )
+        stream.start()
 
         frames = []
         num_frames = 0
@@ -176,7 +183,10 @@ class AudioRecorder:
 
         while (num_frames < max_frames) and not silence_detected:
             num_frames += 1
-            data = stream.read(chunk_size)
+            buffer, overflowed = stream.read(chunk_size)
+            if overflowed:
+                logger.debug("Audio input overflow; some samples were dropped")
+            data = bytes(buffer)
             data_array = array.array("h", data)
 
             max_value = max(data_array)
@@ -199,10 +209,11 @@ class AudioRecorder:
         else:
             valid_audio = True
 
-        stream.stop_stream()
+        stream.stop()
         stream.close()
 
         return (b"".join(frames[:-max_silent_frames]), valid_audio)
 
     def terminate(self) -> None:
-        self._pyaudio.terminate()
+        # sounddevice manages PortAudio lifetime itself; kept for API compatibility
+        pass

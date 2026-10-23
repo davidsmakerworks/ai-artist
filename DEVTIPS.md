@@ -223,7 +223,7 @@ If the output directory runs out of deletable files before the target is reached
 
 **Non-square image support** — remove the `img_width == img_height` constraint in `load_config()` (`artist_config.py`), and update `ArtistCanvas.render_creation()` to lay out non-square images correctly. The resize fallback is already in place.
 
-**Configurable audio device** — PyAudio selects the system default for both input and output. Adding device index params to `AudioRecorder` and `AudioPlayer` (and exposing them in config) would help multi-sound-card setups.
+**Configurable audio device** — sounddevice selects the system default for both input and output. Adding a `device` param (name or index, see `sd.query_devices()`) to `AudioRecorder` and `AudioPlayer` (and exposing them in config) would help multi-sound-card setups.
 
 **Slideshow / idle gallery mode** — a configurable option to auto-cycle through recents while idle, rather than showing a static status screen.
 

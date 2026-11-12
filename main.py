@@ -25,15 +25,16 @@ A.R.T.I.S.T. - Audio-Responsive Transformative Imagination Synthesis Technology
 
 Generates images and verses of poetry based on user voice input.
 
-Uses OpenAI GPT Image 1 or Stability AI SDXL/Stable Image to generate images.
+Uses OpenAI GPT Image 1 or Fal.ai models to generate images.
 
-Uses OpenAI GPT Chat Completion or Anthropic Claude to generate verses and
-daydream image prompts, and to choose the best verse from multiple options if
-the critic is enabled.
+Uses OpenAI, Anthropic Claude, or OpenRouter (configurable per character) to
+generate verses and daydream image prompts, and to choose the best verse from
+multiple options if the critic is enabled.
 
-Uses Whisper API to transcribe speech.
+Uses Whisper API to transcribe speech and the OpenAI Moderation API to screen
+verses and image prompts.
 
-Uses Azure Speech API to convert text to speech.
+Uses Azure Speech API or OpenRouter TTS to convert text to speech.
 
 Uses Azure Blob Storage to store downloadable images.
 """
@@ -71,8 +72,6 @@ from artist_config import AppConfig, AppState, ButtonConfig, CharacterConfig, Us
 from artist_painters import (
     FalImageCreator,
     GptImage1Creator,
-    SDXLCreator,
-    StableImageCreator,
 )
 from artist_moderator import ArtistModerator
 from artist_speech import ArtistSpeech, OpenRouterSpeech
@@ -689,55 +688,6 @@ def generate_image_with_prompt(
         return painter.generate_image_data(prompt=img_prompt)
 
 
-def draw_hourglass_indicator(
-    disp_surface: pygame.Surface,
-    poem_side: str,
-    display_width: int,
-    display_height: int,
-) -> None:
-    """
-    Draw a small hourglass icon in the lower corner on the poem side to signal
-    that background processing is underway and input is temporarily blocked.
-    """
-    size = 128
-    margin = 16
-    pad = 14
-
-    x = (display_width - size - margin) if poem_side == "right" else margin
-    y = display_height - size - margin
-
-    pygame.draw.rect(disp_surface, (20, 20, 20), (x, y, size, size))
-    cx = x + size // 2
-    cy = y + size // 2
-    neck_w = 5   # half-width of the waist in pixels
-    cap_h = 9    # height of the flat top/bottom caps
-    color = (220, 220, 220)
-    dark = (20, 20, 20)
-
-    # Single 6-point polygon: two cones joined by a narrow waist
-    body_top = y + pad + cap_h
-    body_bot = y + size - pad - cap_h
-    pygame.draw.polygon(disp_surface, color, [
-        (x + pad,        body_top),
-        (x + size - pad, body_top),
-        (cx + neck_w,    cy),
-        (x + size - pad, body_bot),
-        (x + pad,        body_bot),
-        (cx - neck_w,    cy),
-    ])
-
-    # Flat caps at top and bottom — make it read as a physical container
-    pygame.draw.rect(disp_surface, color, (x + pad, y + pad, size - 2 * pad, cap_h + 2))
-    pygame.draw.rect(disp_surface, color, (x + pad, y + size - pad - cap_h - 2, size - 2 * pad, cap_h + 2))
-
-    # Thin dark line separating each cap from its cone, for depth
-    pygame.draw.rect(disp_surface, dark, (x + pad, y + pad + cap_h, size - 2 * pad, 3))
-    pygame.draw.rect(disp_surface, dark, (x + pad, y + size - pad - cap_h - 3, size - 2 * pad, 3))
-
-    pygame.draw.rect(disp_surface, color, (x, y, size, size), 2)
-    pygame.display.update()
-
-
 def render_creation_display(
     cfg: AppConfig,
     state: AppState,
@@ -1267,26 +1217,12 @@ def create_painter(model: str, cfg: AppConfig):
     """
     Factory function to create an image generation model instance.
     """
-    if model == "sdxl":
-        return SDXLCreator(
-            api_key=cfg.stability_ai_api_key,
-            img_width=cfg.img_width,
-            img_height=cfg.img_height,
-            steps=cfg.sdxl_steps,
-            cfg_scale=cfg.sdxl_cfg_scale,
-        )
-    elif model == "gpt-image-1":
+    if model == "gpt-image-1":
         return GptImage1Creator(
             api_key=cfg.openai_api_key,
             img_width=cfg.img_width,
             img_height=cfg.img_height,
             quality=cfg.gptimage1_quality,
-        )
-    elif model == "stableimage":
-        return StableImageCreator(
-            api_key=cfg.stability_ai_api_key,
-            service=cfg.stable_image_svc,
-            sd3_model=cfg.sd3_model,
         )
     elif model.startswith("fal-ai/"):
         return FalImageCreator(

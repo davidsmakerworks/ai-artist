@@ -186,17 +186,12 @@ class AppConfig:
     critic: CharacterConfig | None = None
     user_prompt_enhancement_type: str | None = None
     daydream_prompt_enhancement_type: str | None = None
-    sdxl_steps: int | None = None
-    sdxl_cfg_scale: float | None = None
     gptimage1_quality: str | None = None
-    stable_image_svc: str | None = None
-    sd3_model: str | None = None
     num_user_prompts_for_emotions: int = 5
     enable_emotion_chip: bool = False
     emotion_chip: CharacterConfig | None = None
     emotion_drift_interval: int = 3
     anthropic_api_key: str | None = None
-    stability_ai_api_key: str | None = None
     openrouter_api_key: str | None = None
     fal_api_key: str | None = None
     dynamic_speech_lines: bool = False
@@ -257,7 +252,7 @@ _KNOWN_CONFIG_KEYS: set[str] = {
     "num_verses", "use_critic",
     "image_model", "daydream_image_model", "img_width", "img_height",
     "user_prompt_enhancement_type", "daydream_prompt_enhancement_type",
-    "sdxl_steps", "sdxl_cfg_scale", "gptimage1_quality", "stableimage_svc", "sd3_model",
+    "gptimage1_quality",
     "display_width", "display_height", "horiz_margin", "vert_margin",
     "verse_font", "verse_font_size", "verse_line_spacing",
     "status_font", "status_heading1_size", "status_heading2_size", "status_status_size",
@@ -502,18 +497,6 @@ def load_config(path: str, local_path: str | None = None) -> AppConfig | None:
             print("Please set FAL_API_KEY environment variable for Fal.ai API key.")
             return None
 
-    stability_ai_api_key = None
-    if config["image_model"] in ["sdxl", "stableimage"] or config[
-        "daydream_image_model"
-    ] in ["sdxl", "stableimage"]:
-        try:
-            stability_ai_api_key = os.environ["SAI_API_KEY"]
-        except KeyError:
-            print(
-                "Please set SAI_API_KEY environment variable for Stability AI API key."
-            )
-            return None
-
     if config["img_width"] != config["img_height"]:
         print(
             "Currently only square images are supported (img_width must equal img_height)."
@@ -543,11 +526,7 @@ def load_config(path: str, local_path: str | None = None) -> AppConfig | None:
         img_height=config["img_height"],
         user_prompt_enhancement_type=config.get("user_prompt_enhancement_type"),
         daydream_prompt_enhancement_type=config.get("daydream_prompt_enhancement_type"),
-        sdxl_steps=config.get("sdxl_steps"),
-        sdxl_cfg_scale=config.get("sdxl_cfg_scale"),
         gptimage1_quality=config.get("gptimage1_quality"),
-        stable_image_svc=config.get("stableimage_svc"),
-        sd3_model=config.get("sd3_model"),
         display_width=config["display_width"],
         display_height=config["display_height"],
         horiz_margin=config["horiz_margin"],
@@ -628,7 +607,6 @@ def load_config(path: str, local_path: str | None = None) -> AppConfig | None:
         azure_speech_key=azure_speech_key,
         azure_storage_key=azure_storage_key,
         anthropic_api_key=anthropic_api_key,
-        stability_ai_api_key=stability_ai_api_key,
         openrouter_api_key=openrouter_api_key,
         fal_api_key=fal_api_key,
     )

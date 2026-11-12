@@ -6,15 +6,15 @@ The system has a clear separation between four layers:
 
 **Configuration & state** (`artist_config.py`) — `AppConfig`, `AppState`, `CharacterConfig`, `ButtonConfig`, `UserAction`, and `load_config()`. No pygame, no network calls. The single place to look when a config key is missing or a field type is wrong. `AppState.js` holds the active `pygame.joystick.Joystick` instance (or `None`) and is updated directly by `check_for_event()` when the controller connects or disconnects.
 
-**Chat characters** (`artist_characters.py`) — `OpenAIChatCharacter`, `ClaudeChatCharacter`, and `OpenRouterChatCharacter`, plus their response wrapper classes. All three share the same single-turn interface: `get_chat_response(message) -> response`. The vendor-specific files (`openai_tools.py`, `anthropic_tools.py`, `openrouter_tools.py`) are now empty stubs reserved for future non-character utilities.
+**Chat characters** (`artist_characters.py`) — `OpenAIChatCharacter`, `ClaudeChatCharacter`, and `OpenRouterChatCharacter`, plus their response wrapper classes. All three share the same single-turn interface: `get_chat_response(message) -> str`.
 
-**Service wrappers** (`artist_speech.py`, `artist_storage.py`, `artist_moderator.py`, `audio_tools.py`) — thin, focused classes that talk to one external API or device. These generally have no business logic. `audio_tools.py` also contains `Transcriber`, which wraps the OpenAI Whisper API for speech-to-text.
+**Service wrappers** (`artist_speech.py`, `artist_storage.py`, `artist_moderator.py`, `audio_tools.py`) — thin, focused classes that talk to one external API or device. These generally have no business logic. `audio_tools.py` contains `AudioRecorder` and `AudioPlayer` (both built on `sounddevice`) plus `Transcriber`, which wraps the OpenAI Whisper API for speech-to-text. `artist_moderator.py` wraps the OpenAI Moderation API (`omni-moderation-latest`).
 
 **Display & image generation** — split across two files:
 - `artist_classes.py` — pygame canvas and surface rendering: `ArtistCanvas`, `StatusScreen`, `ArtistCreation`, and the module-level surface functions (`get_prompt_surface`, `get_emotional_state_surface`, `get_debug_log_surface`, `draw_hourglass_indicator`, `show_status_screen`).
-- `artist_painters.py` — image generator classes that make network calls: `StableImageCreator`, `SDXLCreator`, `GptImage1Creator`, `FalImageCreator`. All share a `generate_image_data(prompt) -> bytes` interface.
+- `artist_painters.py` — image generator classes that make network calls: `GptImage1Creator`, `FalImageCreator`. All share a `generate_image_data(prompt) -> bytes` interface.
 
-**Application logic** (`main.py`) — the creation pipeline, event loop, factory functions (`create_painter`, `create_chat_character`), and recents persistence. At ~1545 lines it's still the largest file but now focused on orchestration.
+**Application logic** (`main.py`) — the creation pipeline, event loop, factory functions (`create_painter`, `create_chat_character`), and recents persistence. At ~1510 lines it's still the largest file but now focused on orchestration.
 
 The two factories are the single point where you'd add a new image model or LLM backend. Everything above them in the call stack is model-agnostic.
 
@@ -28,7 +28,7 @@ The two factories are the single point where you'd add a new image model or LLM 
 
 ```json
 {
-  "poet": { "model": "claude-opus-4-8" }
+  "poet": { "model": "deepseek/deepseek-v4-5" }
 }
 ```
 
@@ -70,7 +70,7 @@ All three constructors accept `provider_options: dict | None = None`. The dict i
 
 ## The Critic's Fragile Number Parser
 
-`get_best_verse()` in [main.py:223](main.py#L223) determines the winning poem by scanning the critic's response for the first digit character:
+`get_best_verse()` in [main.py:219](main.py#L219) determines the winning poem by scanning the critic's response for the first digit character:
 
 ```python
 for c in critic_verdict:
@@ -79,25 +79,25 @@ for c in critic_verdict:
         break
 ```
 
-This works well when the critic responds "Poem 1 is the best choice." It breaks silently if the critic says "the 3rd poem" (returns 3, which may not be a valid index) or if the model starts its response with a year or any other number. Falls back to `random.choice(verses)` if no digit is found. If you enable the critic, instruct it in its system prompt to reply with only a single digit.
+This works well when the critic responds "Poem 1 is the best choice." It misbehaves if the response contains any other digit first (e.g. a year): a digit larger than `num_verses` raises `IndexError`, which fails the creation with the `composing_verse` failure reason, and `0` silently selects the last verse. Falls back to `random.choice(verses)` if no digit is found. If you enable the critic, instruct it in its system prompt to reply with only a single digit.
 
 ---
 
 ## Only Square Images Supported
 
-`load_config()` hard-rejects any config where `img_width != img_height` ([artist_config.py:360](artist_config.py#L360)). This affects Stable Image and GPT Image 1 (which support non-square sizes). The code to resize a non-square image already exists in `render_creation_display()`, so lifting this restriction is primarily a config-validation change.
+`load_config()` hard-rejects any config where `img_width != img_height` ([artist_config.py:500](artist_config.py#L500)). This affects GPT Image 1 and Fal.ai models (which support non-square sizes). The code to resize a non-square image already exists in `render_creation_display()`, so lifting this restriction is primarily a config-validation change.
 
 ---
 
 ## Multiple OpenAI Clients
 
-`GptImage1Creator` (in `artist_painters.py`), `Transcriber` (in `audio_tools.py`), and every `OpenAIChatCharacter` instance each creates its own `OpenAI()` client. On a typical run you'll have 3–5 independent clients. `FalImageCreator` uses a `FalSyncClient` (not OpenAI) initialized with the `FAL_API_KEY` — it does not set the key as an environment variable. The README flags the multiple-client issue as known. It's harmless but wasteful — consolidating them would also simplify credential management.
+`GptImage1Creator` (in `artist_painters.py`), `Transcriber` (in `audio_tools.py`), `ArtistModerator` (in `artist_moderator.py`), and every `OpenAIChatCharacter` instance each creates its own `OpenAI()` client. Transcriber and moderator are always created, so every run has at least two, plus one per OpenAI-backed painter or character. `FalImageCreator` uses a `FalSyncClient` (not OpenAI) initialized with the `FAL_API_KEY` — it does not set the key as an environment variable. The README lists consolidating these as a future enhancement. It's harmless but wasteful — consolidating them would also simplify credential management.
 
 ---
 
 ## SSML Voice Features Are Wired Up but Unused
 
-`ArtistSpeech` ([artist_speech.py:58](artist_speech.py#L58)) stores `style`, `pitch`, `rate`, and `role` as instance attributes. The SSML generator includes them if non-None. But nothing in the application ever sets them after initialization — they remain `None` for every call. If you want to give the installation a more expressive voice (whispery for daydreams, excited for user creations) the infrastructure is already there.
+`ArtistSpeech` ([artist_speech.py:59](artist_speech.py#L59)) stores `style`, `pitch`, `rate`, and `role` as instance attributes. The SSML generator includes them if non-None. But nothing in the application ever sets them after initialization — they remain `None` for every call. If you want to give the installation a more expressive voice (whispery for daydreams, excited for user creations) the infrastructure is already there.
 
 ---
 
@@ -111,7 +111,7 @@ This works well when the critic responds "Poem 1 is the best choice." It breaks 
 
 The two `synthesize_text()` methods are therefore **not format-compatible** — Azure bytes include a WAV header, OpenRouter bytes do not. Each class's own `play_audio()` handles its own format correctly, but you cannot mix them (e.g. pass Azure output to `OpenRouterSpeech.play_audio()`).
 
-`speech_service: "openrouter"` requires `speech_model` to also be set in `config.json`; Azure does not use `speech_model` but requires `speech_language` and `speech_gender`.
+`speech_service: "openrouter"` requires `speech_model` to also be set in `config.json` and `OPENROUTER_API_KEY` in the environment. Azure does not use `speech_model`; it uses `speech_language` and `speech_gender` (defaulting to `"en-US"` and `"Female"`) and requires `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`.
 
 ---
 
@@ -128,13 +128,13 @@ In both cases the old files are not deleted automatically. Clear `cache/` after 
 
 ## Debug Log Path Is Hardcoded
 
-`wait_for_action()` calls `get_debug_log_surface(log_file="artist.log", ...)` ([main.py:440](main.py#L440)) with a literal path, not from config. If `log_config.py` is ever changed to write the log elsewhere, the on-screen debug view will silently show an error rather than failing obviously.
+`wait_for_action()` calls `get_debug_log_surface(log_file="artist.log", ...)` ([main.py:436](main.py#L436)) with a literal path, not from config. The logger is created with the same literal at [main.py:85](main.py#L85). If one is changed without the other, the on-screen debug view will silently show an error rather than failing obviously. Both are relative paths, so they resolve against the current working directory.
 
 ---
 
 ## Recents Are Screenshot-Based
 
-When you browse recents with LEFT/RIGHT, the code loads the saved PNG screenshot from `output/` ([main.py:455](main.py#L455)) — the full canvas (image + verse baked together). The raw generated image is not stored separately. If you want to show the same creation at a different layout or aspect ratio later, it isn't possible from stored data.
+When you browse recents with LEFT/RIGHT, the code loads the saved PNG screenshot from `output_dir` ([main.py:459](main.py#L459)) — the full canvas (image + verse baked together). The raw generated image is not stored separately. If you want to show the same creation at a different layout or aspect ratio later, it isn't possible from stored data.
 
 ---
 
@@ -146,7 +146,7 @@ Emotional state is updated in two ways:
 
 The counter `state.daydreams_since_user_prompt` resets to 0 on any user creation. So if users interact frequently the emotional state is purely user-driven; the drift path only activates during long idle periods.
 
-Emotion is injected into both the poet's base prompt and the artist's daydream prompt, but not into the visionary's image prompt.
+When `enable_emotion_chip` is on and a state exists, emotion is injected into the poet's base prompt (user creations only, not daydreams), the artist's daydream prompt, and the raconteur's speech-line prompt. It is not injected into the visionary's image prompt.
 
 ---
 
@@ -165,23 +165,23 @@ The controller is not required at startup. `init_joystick()` sets `state.js` to 
 
 ## Daydream Rate Limiting
 
-Manual daydreams (pressing `d`) are rate-limited by a sliding window: `manual_daydream_window` seconds, `manual_daydream_limit` triggers ([main.py:340](main.py#L340)). Expired timestamps are cleaned up at the top of the `wait_for_action()` loop. Auto-daydreams are not rate-limited in the same way — they're controlled purely by the scheduled `next_change_time`.
+Manual daydreams (pressing `d` or the `daydream_button`) are rate-limited by a sliding window: `manual_daydream_window` minutes in `config.json` (converted to seconds on load), `manual_daydream_limit` triggers ([main.py:361](main.py#L361)). When the limit is reached, a refusal line is spoken instead. Expired timestamps are cleaned up at the top of the `wait_for_action()` loop. Auto-daydreams only run between `daydream_start_hour` and `daydream_end_hour` on `daydream_iso_weekdays`. Auto-daydreams are not rate-limited in the same way — they're controlled purely by the scheduled `next_change_time`.
 
 ---
 
 ## Audio Silence Detection Known Limitations
 
-The recorder (`audio_tools.py:88`) has two TODOs in its docstring:
+The recorder (`AudioRecorder.record()`, [audio_tools.py:141](audio_tools.py#L141)) has two TODOs in its docstring:
 - Improve silence detection (currently just peak amplitude vs. threshold)
 - Trim pre-audio silence
 
-The current approach: if peak amplitude in a chunk is below `silence_threshold` (default 2000), it counts as a silent frame. After `max_silent_frames` (default 10) consecutive silent chunks, recording stops. The silence threshold is not configurable from `config.json` — it's a hardcoded default on the `record()` call in `capture_user_audio()`. To tune microphone sensitivity you need to either change the default in `audio_tools.py` or pass it explicitly from the config.
+The current approach: if peak amplitude in a chunk is below `silence_threshold` (default 2000), it counts as a silent frame. Once more than `max_silent_frames` (default 10) consecutive silent chunks are seen, recording stops. Recordings shorter than `min_frames` (default 18) chunks are treated as invalid, and `capture_user_audio()` retries up to 10 times before returning to the Ready screen. The silence threshold is not configurable from `config.json` — it's a hardcoded default on the `record()` call in `capture_user_audio()`. To tune microphone sensitivity you need to either change the default in `audio_tools.py` or pass it explicitly from the config.
 
 ---
 
 ## Output Directory Disk Space Management
 
-`enforce_output_disk_space()` runs automatically after every creation (`save_creation_locally` → `update_recents_and_scheduling` → `enforce_output_disk_space`). The call order matters: recents are updated first so the protected set is always current when cleanup runs.
+`enforce_output_disk_space()` runs automatically after every creation (`save_creation_locally` → `upload_creation_to_storage` → `update_recents_and_scheduling` → `enforce_output_disk_space`). The call order matters: recents are updated first so the protected set is always current when cleanup runs.
 
 **Thresholds** (configured in `config.json`):
 - `disk_space_warn_percentage` (default 10) — cleanup triggers when free space falls below this.
@@ -189,7 +189,7 @@ The current approach: if peak amplitude in a chunk is below `silence_threshold` 
 
 **Protected files** — any `.png` whose `base_name` appears in `state.recents` is never deleted, preventing crashes when the user browses recents with LEFT/RIGHT.
 
-**Deletion order** — unprotected `.png` files in `output/` are deleted oldest-first by mtime. The function re-checks disk usage after each deletion and stops as soon as the target is met, avoiding over-deletion.
+**Deletion order** — unprotected `.png` files in `output_dir` are deleted oldest-first by mtime. The function re-checks disk usage after each deletion and stops as soon as the target is met, avoiding over-deletion.
 
 Uses `shutil.disk_usage()` for cross-platform compatibility (Windows and Linux).
 
@@ -202,7 +202,7 @@ If the output directory runs out of deletable files before the target is reached
 ### From the README Backlog
 
 - **Single shared OpenAI client** — pass one `OpenAI()` instance through to all consumers rather than creating one per class.
-- **Better API error handling** — Stability AI and Azure uploads currently log and continue on failure; transient failures could benefit from simple retry with backoff.
+- **Better API error handling** — a failed image generation aborts the creation, and Azure upload failures are logged and skipped; neither is retried. Transient failures could benefit from simple retry with backoff.
 - **Configurable microphone sensitivity** — expose `silence_threshold` and `max_silent_frames` in `config.json` and pass them to `audio_recorder.record()`.
 - **Handle slow Azure uploads** — currently upload is synchronous and blocks before the display is shown. Running it in a background thread would let the creation appear on screen immediately.
 - **Authenticated web access** — the HTML page uploaded to Azure is currently public. Add SAS token generation or a simple auth layer for private installations.
@@ -228,5 +228,3 @@ If the output directory runs out of deletable files before the target is reached
 **Slideshow / idle gallery mode** — a configurable option to auto-cycle through recents while idle, rather than showing a static status screen.
 
 **Verse max length control** — add a config key for max verse lines or word count. The poet system prompt influences this, but prompt engineering alone is unreliable. A post-process trim or a function-call constraint would be more robust.
-
-**Single shared OpenAI client** — `GptImage1Creator`, `Transcriber`, and `OpenAIChatCharacter` each instantiate their own `OpenAI()`. Consolidating would simplify credential management.

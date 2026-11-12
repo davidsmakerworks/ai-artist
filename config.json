@@ -82,11 +82,7 @@
     "daydream_image_model": "fal-ai/z-image/base",
     "img_width": 1024,
     "img_height": 1024,
-    "sdxl_steps": 30,
-    "sdxl_cfg_scale": 7.0,
     "gptimage1_quality": "medium",
-    "stableimage_svc": "ultra",
-    "sd3_model": "sd3.5-large",
 
     "use_critic": false,
     "num_verses": 3,

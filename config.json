@@ -78,11 +78,17 @@
         "system_prompt": "You extract the main subject and setting from a creative writing prompt. Respond with only a JSON object with two keys: \"subjects\" (an array of 1-2 specific lowercase singular nouns for the main subject, no adjectives) and \"settings\" (an array of 1-2 specific lowercase singular nouns for the setting or location, no adjectives). Return raw JSON and do not use Markdown formatting."
     },
 
-    "image_model": "fal-ai/z-image/base",
-    "daydream_image_model": "fal-ai/z-image/base",
+    "image_model": "fal-ai/moss-image",
+    "daydream_image_model": "fal-ai/moss-image",
     "img_width": 1024,
     "img_height": 1024,
     "gptimage1_quality": "medium",
+    "fal_options": {
+        "negative_prompt": "nsfw, worst quality, bad anatomy, watermark, jpeg artifact"
+    },
+    "daydream_fal_options": {
+        "negative_prompt": "nsfw, worst quality, bad anatomy, watermark, jpeg artifact"
+    },
 
     "use_critic": false,
     "num_verses": 3,

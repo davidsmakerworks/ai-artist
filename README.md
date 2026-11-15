@@ -43,6 +43,17 @@ python main.py [--config config.json] [--local-config config-local.json] [--env-
 
 `sfw_mode` (default `true`) appends `sfw_safety_clause` to every character's system prompt; startup fails if `sfw_mode` is on and the clause is empty. Independently of `sfw_mode`, every verse and final image prompt is checked with the OpenAI Moderation API, and a flagged result aborts the creation.
 
+## Fal.ai image options
+
+Optional Fal.ai parameters can be set in `config.json` as JSON objects: `fal_options` applies to `image_model` and `daydream_fal_options` applies to `daydream_image_model`. Each entry is passed as an argument to the Fal.ai image generation call; omit a parameter (or leave the object empty) and it is not sent.
+
+```json
+"fal_options": { "negative_prompt": "blurry, text, watermark" },
+"daydream_fal_options": { "negative_prompt": "blurry, text, watermark", "num_inference_steps": 28 }
+```
+
+The two objects are independent — `daydream_fal_options` does not fall back to `fal_options`. Supported parameters vary by model; see the model's page on Fal.ai. `prompt` and `image_size` are always set by the application and cannot be overridden here. Both keys are ignored for non-Fal.ai image models.
+
 ## Local configuration overrides
 
 A `config-local.json` file placed alongside `config.json` (or any path passed via `--local-config`) is deep-merged on top of the base config before the application starts. Use it for machine-specific settings (model choices, voices, paths) without modifying the checked-in `config.json`. Character sub-objects are merged recursively, so you can override a single field such as `"model"` inside `"poet"` without repeating the entire character block. Unknown keys are logged as warnings and ignored. `config-local.json` is listed in `.gitignore`.

@@ -194,6 +194,8 @@ class AppConfig:
     anthropic_api_key: str | None = None
     openrouter_api_key: str | None = None
     fal_api_key: str | None = None
+    fal_options: dict = field(default_factory=dict)
+    daydream_fal_options: dict = field(default_factory=dict)
     dynamic_speech_lines: bool = False
     raconteur: CharacterConfig | None = None
     enable_daydream_topics: bool = True
@@ -252,7 +254,7 @@ _KNOWN_CONFIG_KEYS: set[str] = {
     "num_verses", "use_critic",
     "image_model", "daydream_image_model", "img_width", "img_height",
     "user_prompt_enhancement_type", "daydream_prompt_enhancement_type",
-    "gptimage1_quality",
+    "gptimage1_quality", "fal_options", "daydream_fal_options",
     "display_width", "display_height", "horiz_margin", "vert_margin",
     "verse_font", "verse_font_size", "verse_line_spacing",
     "status_font", "status_heading1_size", "status_heading2_size", "status_status_size",
@@ -497,6 +499,17 @@ def load_config(path: str, local_path: str | None = None) -> AppConfig | None:
             print("Please set FAL_API_KEY environment variable for Fal.ai API key.")
             return None
 
+    fal_options = config.get("fal_options", {})
+    daydream_fal_options = config.get("daydream_fal_options", {})
+    for key, value in (
+        ("fal_options", fal_options),
+        ("daydream_fal_options", daydream_fal_options),
+    ):
+        if not isinstance(value, dict):
+            print(f"'{key}' must be a JSON object.")
+            logger.error(f"'{key}' must be a JSON object.")
+            return None
+
     if config["img_width"] != config["img_height"]:
         print(
             "Currently only square images are supported (img_width must equal img_height)."
@@ -609,4 +622,6 @@ def load_config(path: str, local_path: str | None = None) -> AppConfig | None:
         anthropic_api_key=anthropic_api_key,
         openrouter_api_key=openrouter_api_key,
         fal_api_key=fal_api_key,
+        fal_options=fal_options,
+        daydream_fal_options=daydream_fal_options,
     )

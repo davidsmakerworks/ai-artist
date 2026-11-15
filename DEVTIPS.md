@@ -68,6 +68,24 @@ All three constructors accept `provider_options: dict | None = None`. The dict i
 
 ---
 
+## Fal.ai Image Options
+
+Two optional top-level config keys carry extra arguments for Fal.ai image models: `fal_options` (for `image_model`) and `daydream_fal_options` (for `daydream_image_model`). Both default to `{}` and `load_config()` rejects either if it is not a JSON object.
+
+`create_painter(model, cfg, fal_options)` takes the dict as its third argument; `main()` passes `cfg.fal_options` for the user painter and `cfg.daydream_fal_options` for the daydream painter. The dict only reaches `FalImageCreator` — it is dropped for `gpt-image-1`.
+
+`FalImageCreator.generate_image_data()` builds the request arguments as `{**options, "prompt": ..., "image_size": ...}`, so:
+
+- Only keys present in the config are sent — there are no defaults for things like `negative_prompt`.
+- `prompt` and `image_size` always win; putting them in the options dict has no effect.
+- Parameter names are not validated. Each Fal.ai model has its own schema, so an option that suits one model may be ignored or rejected by another — which is why the two painters have separate dicts.
+
+There is no fallback between the two keys: an empty or missing `daydream_fal_options` means daydreams send no extra arguments, even when `fal_options` is populated.
+
+**Local override caveat** — because `_deep_merge()` merges dicts recursively, a `fal_options` block in `config-local.json` is merged *into* the base dict rather than replacing it. A key set in `config.json` (e.g. `negative_prompt`) cannot be removed from the local file, only overridden with another value.
+
+---
+
 ## The Critic's Fragile Number Parser
 
 `get_best_verse()` in [main.py:219](main.py#L219) determines the winning poem by scanning the critic's response for the first digit character:
@@ -85,7 +103,7 @@ This works well when the critic responds "Poem 1 is the best choice." It misbeha
 
 ## Only Square Images Supported
 
-`load_config()` hard-rejects any config where `img_width != img_height` ([artist_config.py:500](artist_config.py#L500)). This affects GPT Image 1 and Fal.ai models (which support non-square sizes). The code to resize a non-square image already exists in `render_creation_display()`, so lifting this restriction is primarily a config-validation change.
+`load_config()` hard-rejects any config where `img_width != img_height` ([artist_config.py:513](artist_config.py#L513)). This affects GPT Image 1 and Fal.ai models (which support non-square sizes). The code to resize a non-square image already exists in `render_creation_display()`, so lifting this restriction is primarily a config-validation change.
 
 ---
 

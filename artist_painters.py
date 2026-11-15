@@ -66,21 +66,29 @@ class GptImage1Creator:
 
 class FalImageCreator:
     def __init__(
-        self, api_key: str, model: str, img_width: int, img_height: int
+        self,
+        api_key: str,
+        model: str,
+        img_width: int,
+        img_height: int,
+        options: dict | None = None,
     ) -> None:
         self._client = FalSyncClient(key=api_key)
         self._model = model
         self._img_width = img_width
         self._img_height = img_height
+        self._options = options or {}
 
     def generate_image_data(self, prompt: str) -> bytes:
-        result = self._client.run(
-            self._model,
-            arguments={
-                "prompt": prompt,
-                "image_size": {"width": self._img_width, "height": self._img_height},
-            },
-        )
+        # Optional arguments (e.g. negative_prompt) are forwarded verbatim; the
+        # prompt and image size always come from the pipeline and config.
+        arguments = {
+            **self._options,
+            "prompt": prompt,
+            "image_size": {"width": self._img_width, "height": self._img_height},
+        }
+
+        result = self._client.run(self._model, arguments=arguments)
 
         image_url = result["images"][0]["url"]
 

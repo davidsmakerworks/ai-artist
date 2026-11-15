@@ -1213,9 +1213,10 @@ def run_creation_pipeline(
     return False
 
 
-def create_painter(model: str, cfg: AppConfig):
+def create_painter(model: str, cfg: AppConfig, fal_options: dict | None = None):
     """
     Factory function to create an image generation model instance.
+    fal_options are extra arguments forwarded to Fal.ai models only.
     """
     if model == "gpt-image-1":
         return GptImage1Creator(
@@ -1230,6 +1231,7 @@ def create_painter(model: str, cfg: AppConfig):
             model=model,
             img_width=cfg.img_width,
             img_height=cfg.img_height,
+            options=fal_options,
         )
     else:
         raise ValueError(f"Unknown image model: {model}")
@@ -1359,12 +1361,14 @@ def main() -> None:
         ai_artist = create_chat_character(cfg.artist, cfg)
 
         logger.debug(f"Initializing painter with image model {cfg.image_model}...")
-        painter = create_painter(cfg.image_model, cfg)
+        painter = create_painter(cfg.image_model, cfg, cfg.fal_options)
 
         logger.debug(
             f"Initializing daydream painter with image model {cfg.daydream_image_model}..."
         )
-        daydream_painter = create_painter(cfg.daydream_image_model, cfg)
+        daydream_painter = create_painter(
+            cfg.daydream_image_model, cfg, cfg.daydream_fal_options
+        )
 
         logger.debug("Initializing poet...")
         poet = create_chat_character(cfg.poet, cfg)

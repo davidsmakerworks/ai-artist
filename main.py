@@ -1134,6 +1134,18 @@ def run_creation_pipeline(
             img_prompt = verse
             logger.info(f"Prompt (unenhanced): {img_prompt}")
 
+        # The art style affects only the image model prompt; the verse, user prompt,
+        # and recents (which seed future daydreams) are left untouched.
+        # Token-based (clip) prompts get the style prepended as a leading token, since
+        # earlier tokens carry more weight; natural-language prompts get a trailing sentence.
+        if cfg.use_art_styles:
+            art_style = random.choice(cfg.art_styles)
+            if enhancement_type == "clip":
+                img_prompt = f"{art_style}, {img_prompt}"
+            else:
+                img_prompt = f"{img_prompt}\n\nArt style: {art_style}."
+            logger.info(f"Art style: {art_style}")
+
         show_status_screen(
             surface=disp_surface,
             text=status_label,

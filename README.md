@@ -54,6 +54,15 @@ Optional Fal.ai parameters can be set in `config.json` as JSON objects: `fal_opt
 
 The two objects are independent — `daydream_fal_options` does not fall back to `fal_options`. Supported parameters vary by model; see the model's page on Fal.ai. `prompt` and `image_size` are always set by the application and cannot be overridden here. Both keys are ignored for non-Fal.ai image models.
 
+## Art styles
+
+When `use_art_styles` is `true` (default `false`), one entry from the `art_styles` list is picked at random for each creation and added to the final image model prompt. For token-based prompts (prompt enhancement type `clip`) it is prepended as a leading token (`<style>, ...`); otherwise it is appended as `Art style: <style>.` The style affects only the image prompt — the poem, the stored prompt, and future daydreams are unaffected. Startup fails if `use_art_styles` is on and `art_styles` is empty.
+
+```json
+"use_art_styles": true,
+"art_styles": ["oil painting", "tile mosaic", "impressionist painting", "pastel drawing"]
+```
+
 ## Local configuration overrides
 
 A `config-local.json` file placed alongside `config.json` (or any path passed via `--local-config`) is deep-merged on top of the base config before the application starts. Use it for machine-specific settings (model choices, voices, paths) without modifying the checked-in `config.json`. Character sub-objects are merged recursively, so you can override a single field such as `"model"` inside `"poet"` without repeating the entire character block. Unknown keys are logged as warnings and ignored. `config-local.json` is listed in `.gitignore`.

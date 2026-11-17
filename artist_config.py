@@ -196,6 +196,8 @@ class AppConfig:
     fal_api_key: str | None = None
     fal_options: dict = field(default_factory=dict)
     daydream_fal_options: dict = field(default_factory=dict)
+    use_art_styles: bool = False
+    art_styles: list[str] = field(default_factory=list)
     dynamic_speech_lines: bool = False
     raconteur: CharacterConfig | None = None
     enable_daydream_topics: bool = True
@@ -255,6 +257,7 @@ _KNOWN_CONFIG_KEYS: set[str] = {
     "image_model", "daydream_image_model", "img_width", "img_height",
     "user_prompt_enhancement_type", "daydream_prompt_enhancement_type",
     "gptimage1_quality", "fal_options", "daydream_fal_options",
+    "use_art_styles", "art_styles",
     "display_width", "display_height", "horiz_margin", "vert_margin",
     "verse_font", "verse_font_size", "verse_line_spacing",
     "status_font", "status_heading1_size", "status_heading2_size", "status_status_size",
@@ -510,6 +513,19 @@ def load_config(path: str, local_path: str | None = None) -> AppConfig | None:
             logger.error(f"'{key}' must be a JSON object.")
             return None
 
+    use_art_styles = config.get("use_art_styles", False)
+    art_styles = config.get("art_styles", [])
+    if not isinstance(art_styles, list) or not all(
+        isinstance(s, str) and s.strip() for s in art_styles
+    ):
+        print("'art_styles' must be a JSON array of non-empty strings.")
+        logger.error("'art_styles' must be a JSON array of non-empty strings.")
+        return None
+    if use_art_styles and not art_styles:
+        print("use_art_styles is enabled but 'art_styles' is missing or empty in config.")
+        logger.error("use_art_styles is enabled but 'art_styles' is missing or empty in config.")
+        return None
+
     if config["img_width"] != config["img_height"]:
         print(
             "Currently only square images are supported (img_width must equal img_height)."
@@ -624,4 +640,6 @@ def load_config(path: str, local_path: str | None = None) -> AppConfig | None:
         fal_api_key=fal_api_key,
         fal_options=fal_options,
         daydream_fal_options=daydream_fal_options,
+        use_art_styles=use_art_styles,
+        art_styles=[s.strip() for s in art_styles],
     )

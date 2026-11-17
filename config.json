@@ -89,6 +89,29 @@
     "daydream_fal_options": {
         "negative_prompt": "nsfw, worst quality, bad anatomy, watermark, jpeg artifact"
     },
+    "use_art_styles": true,
+    "art_styles": [
+        "oil painting",
+        "watercolor painting",
+        "impressionist painting",
+        "pastel drawing",
+        "charcoal sketch",
+        "tile mosaic",
+        "stained glass window",
+        "woodblock print",
+        "art nouveau poster",
+        "cubist painting",
+        "pointillist painting",
+        "surrealist painting",
+        "ink wash painting",
+        "linocut print",
+        "gouache illustration",
+        "colored pencil drawing",
+        "art deco illustration",
+        "pop art screen print",
+        "expressionist painting",
+        "fresco"
+    ],
 
     "use_critic": false,
     "num_verses": 3,
